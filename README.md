@@ -32,6 +32,55 @@ cd mamagadhi-app
 # Install dependencies
 npm install
 
+# Start development servers
+npm run dev
+```
+
+### 🚨 Common Issues & Solutions
+
+#### Issue: `Cannot find module '../lightningcss.win32-x64-msvc.node'` on Windows
+
+This happens when native dependencies aren't properly installed for your platform.
+
+**Solution 1 - Quick Fix:**
+```bash
+npm run clean-install
+```
+
+**Solution 2 - Manual Fix:**
+```bash
+# Delete all node_modules and lock files
+rm -rf node_modules apps/*/node_modules package-lock.json apps/*/package-lock.json
+
+# Clear npm cache
+npm cache clean --force
+
+# Reinstall everything
+npm install
+```
+
+**Solution 3 - Platform-specific rebuild:**
+```bash
+cd apps/frontend
+npm rebuild lightningcss
+# or
+npm install lightningcss --force
+```
+
+#### Issue: Development server won't start
+
+```bash
+# Check if ports are available
+npx kill-port 3000 3001
+
+# Start specific apps
+npm run dev:frontend  # Frontend only
+npm run dev:backend   # Backend only
+```
+
+# Install dependencies
+npm install
+
 # Set up environment variables
 cp apps/frontend/.env.example apps/frontend/.env.local
 cp apps/backend/.env.example apps/backend/.env.local

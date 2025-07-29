@@ -2,12 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { UserProfile, DriverProfile } from 'shared-types';
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { supabase } from '../lib/supabase';
 
 interface CombinedUserData {
   userProfile: UserProfile;
@@ -118,6 +113,10 @@ export const useAdminLogic = () => {
 
   const fetchStats = async () => {
     try {
+      if (!supabase) {
+        throw new Error('Database not available');
+      }
+      
       // Fetch all user profiles for stats
       const { data: allUsers, error: statsError } = await supabase
         .from('user_profiles')
@@ -151,6 +150,10 @@ export const useAdminLogic = () => {
   const fetchAllUsers = async () => {
     try {
       setLoadingData(true);
+      
+      if (!supabase) {
+        throw new Error('Database not available');
+      }
       
       // Fetch all user profiles from Supabase
       const { data: userProfiles, error: userError } = await supabase
@@ -202,6 +205,10 @@ export const useAdminLogic = () => {
     if (!confirmAction) return;
     
     try {
+      if (!supabase) {
+        throw new Error('Database not available');
+      }
+      
       const { userId, documentType, verified } = confirmAction;
       const updateField = documentType === 'id' ? 'id_verified' : 'dl_verified';
       

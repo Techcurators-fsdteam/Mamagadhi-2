@@ -2,16 +2,10 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../lib/auth';
-import { updateUserProfile } from '../lib/supabase';
+import { updateUserProfile, supabase } from '../lib/supabase';
 import { sendEmailVerification, updateProfile as updateFirebaseProfile } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 export const useProfileLogic = () => {
   const router = useRouter();
@@ -59,7 +53,7 @@ export const useProfileLogic = () => {
   // Fetch driver_profiles on load and after upload
   useEffect(() => {
     const fetchDriverProfile = async () => {
-      if (user?.uid) {
+      if (user?.uid && supabase) {
         const { data } = await supabase
           .from('driver_profiles')
           .select('*')
@@ -111,7 +105,7 @@ export const useProfileLogic = () => {
 
   useEffect(() => {
     const fetchUserProfile = async () => {
-      if (user?.uid) {
+      if (user?.uid && supabase) {
         const { data } = await supabase
           .from('user_profiles')
           .select('*')
@@ -234,7 +228,7 @@ export const useProfileLogic = () => {
       setMessage('Driving Licence uploaded successfully!');
       setDrivingLicenceFile(null); // Clear file input
       // Refetch driver profile to persist lock state
-      if (user?.uid) {
+      if (user?.uid && supabase) {
         const { data } = await supabase
           .from('driver_profiles')
           .select('*')
@@ -257,7 +251,7 @@ export const useProfileLogic = () => {
       setMessage('ID Card uploaded successfully!');
       setIdCardFile(null); // Clear file input
       // Refetch driver profile to persist lock state
-      if (user?.uid) {
+      if (user?.uid && supabase) {
         const { data } = await supabase
           .from('driver_profiles')
           .select('*')
@@ -281,7 +275,7 @@ export const useProfileLogic = () => {
       setPhotoFile(null); // Clear file input
       setPhotoPreview(null);
       // Refetch user profile to update avatar and lock state
-      if (user?.uid) {
+      if (user?.uid && supabase) {
         const { data } = await supabase
           .from('user_profiles')
           .select('*')

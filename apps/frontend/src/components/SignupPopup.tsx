@@ -49,7 +49,7 @@ export default function SignupPopup({ isOpen, onClose, onSwitchToLogin }: Signup
   }, [resendCooldown]);
 
   useEffect(() => {
-    if (isOpen && !recaptchaVerifier) {
+    if (isOpen && !recaptchaVerifier && auth) {
       const verifier = new RecaptchaVerifier(auth, 'signup-recaptcha-container', {
         size: 'invisible',
         callback: () => {
@@ -102,6 +102,10 @@ export default function SignupPopup({ isOpen, onClose, onSwitchToLogin }: Signup
         throw new Error('reCAPTCHA not initialized');
       }
 
+      if (!auth) {
+        throw new Error('Firebase Auth not initialized');
+      }
+
       const confirmationResult = await signInWithPhoneNumber(auth, formData.phone, recaptchaVerifier);
       setVerificationId(confirmationResult.verificationId);
       setStep('phone-verification');
@@ -150,6 +154,10 @@ export default function SignupPopup({ isOpen, onClose, onSwitchToLogin }: Signup
     
     try {
       console.log('Starting account creation...');
+      
+      if (!auth) {
+        throw new Error('Firebase Auth not initialized');
+      }
       
       // Create user with email and password in Firebase
       const userCredential = await createUserWithEmailAndPassword(
@@ -208,7 +216,9 @@ export default function SignupPopup({ isOpen, onClose, onSwitchToLogin }: Signup
         }
         
         // Sign out to clear any auth state
-        await auth.signOut();
+        if (auth) {
+          await auth.signOut();
+        }
         
         throw new Error('Failed to create user profile in database. Please try again.');
       }
@@ -225,7 +235,7 @@ export default function SignupPopup({ isOpen, onClose, onSwitchToLogin }: Signup
       console.error('Account creation error:', error);
       
       // If we have a Firebase user but something failed, clean it up
-      if (firebaseUser && auth.currentUser) {
+      if (firebaseUser && auth && auth.currentUser) {
         try {
           await auth.currentUser.delete();
           console.log('Firebase user cleaned up due to general error');
@@ -236,7 +246,9 @@ export default function SignupPopup({ isOpen, onClose, onSwitchToLogin }: Signup
       
       // Sign out to clear any auth state
       try {
-        await auth.signOut();
+        if (auth) {
+          await auth.signOut();
+        }
       } catch (signOutError) {
         console.error('Failed to sign out:', signOutError);
       }
@@ -268,6 +280,9 @@ export default function SignupPopup({ isOpen, onClose, onSwitchToLogin }: Signup
       try {
         if (!recaptchaVerifier) {
           throw new Error('reCAPTCHA not initialized');
+        }
+        if (!auth) {
+          throw new Error('Firebase Auth not initialized');
         }
         const confirmationResult = await signInWithPhoneNumber(auth, formData.phone, recaptchaVerifier);
         setVerificationId(confirmationResult.verificationId);

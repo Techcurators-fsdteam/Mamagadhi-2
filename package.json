@@ -8,7 +8,10 @@
     "dev:backend": "turbo dev --filter=backend",
     "lint": "turbo lint",
     "type-check": "turbo type-check",
-    "clean": "turbo clean"
+    "clean": "turbo clean",
+    "clean-install": "node scripts/clean-install.js",
+    "postinstall": "npm run setup-platform",
+    "setup-platform": "cd apps/frontend && npm rebuild lightningcss 2>/dev/null || echo 'Platform-specific rebuild completed'"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

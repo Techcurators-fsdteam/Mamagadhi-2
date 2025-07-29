@@ -42,7 +42,7 @@ export default function LoginPopup({ isOpen, onClose, onSwitchToSignup }: LoginP
   }, [resendCooldown]);
 
   useEffect(() => {
-    if (isOpen && authMethod === 'phone' && !recaptchaVerifier) {
+    if (isOpen && authMethod === 'phone' && !recaptchaVerifier && auth) {
       const verifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
         size: 'invisible',
         callback: () => {
@@ -65,6 +65,9 @@ export default function LoginPopup({ isOpen, onClose, onSwitchToSignup }: LoginP
     setLoading(true);
 
     try {
+      if (!auth) {
+        throw new Error('Firebase Auth not initialized');
+      }
       await signInWithEmailAndPassword(auth, email, password);
       // Don't need to manually check Supabase here - the AuthProvider will handle it
       onClose();
@@ -100,6 +103,10 @@ export default function LoginPopup({ isOpen, onClose, onSwitchToSignup }: LoginP
         throw new Error('reCAPTCHA not initialized');
       }
 
+      if (!auth) {
+        throw new Error('Firebase Auth not initialized');
+      }
+
       const confirmationResult = await signInWithPhoneNumber(auth, phone, recaptchaVerifier);
       setVerificationId(confirmationResult.verificationId);
       setStep('otp');
@@ -123,6 +130,9 @@ export default function LoginPopup({ isOpen, onClose, onSwitchToSignup }: LoginP
     setLoading(true);
 
     try {
+      if (!auth) {
+        throw new Error('Firebase Auth not initialized');
+      }
       const credential = PhoneAuthProvider.credential(verificationId, otp);
       await signInWithCredential(auth, credential);
       onClose();
@@ -148,6 +158,9 @@ export default function LoginPopup({ isOpen, onClose, onSwitchToSignup }: LoginP
       try {
         if (!recaptchaVerifier) {
           throw new Error('reCAPTCHA not initialized');
+        }
+        if (!auth) {
+          throw new Error('Firebase Auth not initialized');
         }
         const confirmationResult = await signInWithPhoneNumber(auth, phone, recaptchaVerifier);
         setVerificationId(confirmationResult.verificationId);

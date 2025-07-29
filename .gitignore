@@ -4,6 +4,13 @@
 node_modules
 .pnp
 .pnp.js
+**/node_modules/
+package-lock.json
+apps/*/package-lock.json
+
+# Platform-specific binaries
+*.node
+apps/**/node_modules/**/*.node
 
 # Local env files
 .env

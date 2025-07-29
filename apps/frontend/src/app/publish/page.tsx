@@ -35,7 +35,7 @@ function PublishRide() {
 
   useEffect(() => {
     const checkVerificationStatus = async () => {
-      if (user?.uid) {
+      if (user?.uid && supabase) {
         try {
           const { data } = await supabase
             .from('driver_profiles')

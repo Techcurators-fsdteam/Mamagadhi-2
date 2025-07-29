@@ -8,6 +8,7 @@ import SignupPopup from './SignupPopup';
 import { useAuth } from '../lib/auth';
 import { useRouter } from 'next/navigation';
 import LoginRequiredPopup from './LoginRequiredPopup';
+import { supabase } from '../lib/supabase';
 
 const Navbar = () => {
   const { user, userProfile, loading, signOut } = useAuth();
@@ -34,16 +35,41 @@ const Navbar = () => {
   };
 
   // Handler for Post a ride
-  const handlePostRide = (e: React.MouseEvent) => {
+  const handlePostRide = async (e: React.MouseEvent) => {
     e.preventDefault();
     if (!user) {
       setShowLoginRequired(true);
       return;
     }
-    if (typeof window !== 'undefined' && localStorage.getItem('driverVerified') !== 'true') {
-      setShowDriverPopup(true);
-      return;
+    
+    // Check verification status from database instead of localStorage
+    try {
+      if (!supabase) {
+        throw new Error('Database not available');
+      }
+      
+      const { data } = await supabase
+        .from('driver_profiles')
+        .select('id_verified, dl_verified')
+        .eq('user_profile_id', user.uid)
+        .single();
+      
+      if (data) {
+        const isFullyVerified = data.id_verified && data.dl_verified;
+        if (!isFullyVerified) {
+          setShowDriverPopup(true);
+          return;
+        }
+      } else {
+        // No driver profile exists, show driver popup
+        setShowDriverPopup(true);
+        return;
+      }
+    } catch (error) {
+      console.error('Error checking verification status:', error);
+      // On error, still allow navigation but let publish page handle verification
     }
+    
     router.push('/publish');
   };
 

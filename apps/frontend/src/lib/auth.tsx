@@ -27,7 +27,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
+    if (!auth) {
+      // Firebase not available (during build or missing config)
+      setLoading(false);
+      return;
+    }
+
+    const unsubscribe = auth.onAuthStateChanged(async (firebaseUser: User | null) => {
       setUser(firebaseUser);
       if (firebaseUser) {
         try {
@@ -60,7 +66,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const signOut = async () => {
-    await auth.signOut();
+    if (auth) {
+      await auth.signOut();
+    }
     setUser(null);
     setUserProfile(null);
     if (typeof window !== 'undefined') {

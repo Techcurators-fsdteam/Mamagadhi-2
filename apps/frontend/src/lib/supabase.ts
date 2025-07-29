@@ -1,9 +1,19 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient, SupabaseClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+// Only create client if we have proper environment variables
+let supabase: SupabaseClient | null = null;
+
+if (supabaseUrl && supabaseAnonKey) {
+  supabase = createClient(supabaseUrl, supabaseAnonKey);
+} else if (typeof window !== 'undefined') {
+  // Only warn in browser environment, not during build
+  console.warn('Supabase configuration missing. Some features may not work.');
+}
+
+export { supabase };
 
 // User profile interface
 export interface UserProfile {
@@ -25,6 +35,10 @@ export interface UserProfile {
 
 // Function to create user profile - direct Supabase call for local dev
 export const createUserProfile = async (userData: Omit<UserProfile, 'created_at' | 'updated_at'>) => {
+  if (!supabase) {
+    throw new Error('Supabase not configured');
+  }
+  
   const { data, error } = await supabase
     .from('user_profiles')
     .insert([{
@@ -45,6 +59,10 @@ export const createUserProfile = async (userData: Omit<UserProfile, 'created_at'
 
 // Function to get user profile - direct Supabase call for local dev
 export const getUserProfile = async (userId: string): Promise<UserProfile | null> => {
+  if (!supabase) {
+    throw new Error('Supabase not configured');
+  }
+  
   const { data, error }: { data: UserProfile | null; error: unknown } = await supabase
     .from('user_profiles')
     .select('*')
@@ -61,6 +79,10 @@ export const getUserProfile = async (userId: string): Promise<UserProfile | null
 
 // Function to update user profile - direct Supabase call for local dev
 export const updateUserProfile = async (userId: string, updates: Partial<UserProfile>) => {
+  if (!supabase) {
+    throw new Error('Supabase not configured');
+  }
+  
   const { data, error } = await supabase
     .from('user_profiles')
     .update({ ...updates, updated_at: new Date().toISOString() })
