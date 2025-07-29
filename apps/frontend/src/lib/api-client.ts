@@ -71,7 +71,7 @@ class ApiClient {
   }
 
   // Get documents (example endpoint)
-  async getDocuments(): Promise<ApiResponse<any[]>> {
+  async getDocuments(): Promise<ApiResponse<Record<string, unknown>[]>> {
     return this.request('/api/documents');
   }
 

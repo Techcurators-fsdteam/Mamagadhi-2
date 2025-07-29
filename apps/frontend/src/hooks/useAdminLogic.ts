@@ -78,7 +78,7 @@ export const useAdminLogic = () => {
             localStorage.removeItem(SESSION_KEY);
           }
         }
-      } catch (error) {
+      } catch {
         // Invalid session data, remove it
         localStorage.removeItem(SESSION_KEY);
       }
@@ -86,7 +86,7 @@ export const useAdminLogic = () => {
     };
 
     checkExistingSession();
-  }, []);
+  }, [SESSION_DURATION]);
 
   useEffect(() => {
     if (isAuthenticated) {

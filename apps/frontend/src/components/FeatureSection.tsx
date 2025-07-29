@@ -2,7 +2,6 @@
 
 import { motion } from "framer-motion";
 import { Check, CreditCard, Rocket } from "lucide-react";
-import React from "react";
 
 const fadeInUp = {
   initial: { opacity: 0, y: 20 },
@@ -34,20 +33,7 @@ const features: Feature[] = [
   },
 ];
 
-const getIcon = (iconName: string): React.ReactNode => {
-  const iconProps = { size: 48, color: "#4AAEFF" };
-  
-  switch (iconName) {
-    case "CreditCard":
-      return React.createElement(CreditCard, iconProps);
-    case "Check":
-      return React.createElement(Check, iconProps);
-    case "Rocket":
-      return React.createElement(Rocket, iconProps);
-    default:
-      return null;
-  }
-};const FeatureSection = () => {
+const FeatureSection = () => {
   return (
     <section className="w-full flex flex-col items-center bg-white py-14 px-6 max-w-7xl mx-auto">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-12 w-full text-center">
@@ -59,7 +45,12 @@ const getIcon = (iconName: string): React.ReactNode => {
             transition={{ duration: 0.5, ease: "easeOut" as const }}
             className="flex flex-col items-center"
           >
-            {getIcon(feature.iconName) as any}
+            {/* @ts-expect-error - React 19 type incompatibility with lucide-react */}
+            {feature.iconName === "CreditCard" && <CreditCard size={48} color="#4AAEFF" />}
+            {/* @ts-expect-error - React 19 type incompatibility with lucide-react */}
+            {feature.iconName === "Check" && <Check size={48} color="#4AAEFF" />}
+            {/* @ts-expect-error - React 19 type incompatibility with lucide-react */}
+            {feature.iconName === "Rocket" && <Rocket size={48} color="#4AAEFF" />}
             <h3 className="font-semibold text-lg mt-4 text-[#222]">{feature.title}</h3>
             <p className="text-gray-500 text-sm mt-2 max-w-xs">
               {feature.description}

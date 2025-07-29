@@ -4,19 +4,25 @@ import { useRef } from 'react';
 import Image from 'next/image';
 
 interface ProfilePhotoSectionProps {
-  userProfile: any;
+  userProfile: {
+    profile_url?: string;
+    [key: string]: unknown;
+  } | null;
   photoPreview: string | null;
   photoFile: File | null;
   photoUploadStatus: 'idle' | 'uploading' | 'uploaded' | 'error';
   isProfileImageLocked: boolean;
   formData: {
     display_name: string;
-    [key: string]: any;
+    [key: string]: unknown;
   };
-  user: any;
+  user: {
+    uid: string;
+    email?: string | null;
+    photoURL?: string | null;
+  } | null;
   onPhotoChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onPhotoUpload: () => Promise<void>;
-  setError: (error: string) => void;
 }
 
 const ProfilePhotoSection: React.FC<ProfilePhotoSectionProps> = ({
@@ -28,8 +34,7 @@ const ProfilePhotoSection: React.FC<ProfilePhotoSectionProps> = ({
   formData,
   user,
   onPhotoChange,
-  onPhotoUpload,
-  setError
+  onPhotoUpload
 }) => {
   const photoInputRef = useRef<HTMLInputElement>(null);
 

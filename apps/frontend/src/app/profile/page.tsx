@@ -45,8 +45,7 @@ export default function ProfilePage() {
     handleSave,
     handleEmailVerification,
     handleCancel,
-    setIsEditing,
-    setError
+    setIsEditing
   } = useProfileLogic();
 
   if (loading) {
@@ -85,7 +84,7 @@ export default function ProfilePage() {
             {/* Top Section: Profile Picture + Passenger Information */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-0">
               <ProfilePhotoSection
-                userProfile={userProfile}
+                userProfile={userProfile as { [key: string]: unknown; profile_url?: string } | null}
                 photoPreview={photoPreview}
                 photoFile={photoFile}
                 photoUploadStatus={photoUploadStatus}
@@ -94,13 +93,12 @@ export default function ProfilePage() {
                 user={user}
                 onPhotoChange={handlePhotoChange}
                 onPhotoUpload={handleUploadPhoto}
-                setError={setError}
               />
 
               <PassengerInformationSection
                 formData={formData}
-                userProfile={userProfile}
-                user={user}
+                userProfile={userProfile as { email_verified?: boolean; email?: string; is_phone_verified?: boolean } | null}
+                user={user as { email?: string; uid: string; emailVerified?: boolean } | null}
                 isEditing={isEditing}
                 isVerifyingEmail={isVerifyingEmail}
                 onInputChange={handleInputChange}

@@ -38,7 +38,7 @@ const AdminFilters: React.FC<AdminFiltersProps> = ({
           </label>
           <select
             value={filterRole}
-            onChange={(e) => onRoleChange(e.target.value as any)}
+            onChange={(e) => onRoleChange(e.target.value as 'all' | 'driver' | 'passenger' | 'both')}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4AAAFF] focus:border-transparent"
           >
             <option value="all">All Roles</option>
@@ -53,7 +53,7 @@ const AdminFilters: React.FC<AdminFiltersProps> = ({
           </label>
           <select
             value={filterVerification}
-            onChange={(e) => onVerificationChange(e.target.value as any)}
+            onChange={(e) => onVerificationChange(e.target.value as 'all' | 'verified' | 'unverified')}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4AAAFF] focus:border-transparent"
           >
             <option value="all">All Users</option>

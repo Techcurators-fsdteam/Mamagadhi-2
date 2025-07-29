@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     // Check for admin session in localStorage (this will be handled client-side)
     // For now, just return success as authentication is handled by the React components
     return NextResponse.json({ access: true }, { status: 200 });
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }

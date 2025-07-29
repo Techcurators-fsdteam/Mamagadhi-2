@@ -15,8 +15,6 @@ function PublishRide() {
   const router = useRouter();
   const { user, loading } = useAuth();
   const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
-  const [isIdVerified, setIsIdVerified] = useState(false);
-  const [isDlVerified, setIsDlVerified] = useState(false);
   const [verificationLoading, setVerificationLoading] = useState(true);
   const [formData, setFormData] = useState({
     from: '',
@@ -46,9 +44,6 @@ function PublishRide() {
             .single();
           
           if (data) {
-            setIsIdVerified(data.id_verified || false);
-            setIsDlVerified(data.dl_verified || false);
-            
             // Check if both are verified
             const isFullyVerified = data.id_verified && data.dl_verified;
             if (!isFullyVerified) {

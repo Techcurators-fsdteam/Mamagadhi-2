@@ -8,8 +8,16 @@ interface PassengerInformationSectionProps {
     phone: string;
     role: 'driver' | 'passenger' | 'both';
   };
-  userProfile: any;
-  user: any;
+  userProfile: {
+    email_verified?: boolean;
+    email?: string;
+    is_phone_verified?: boolean;
+  } | null;
+  user: {
+    email?: string;
+    uid: string;
+    emailVerified?: boolean;
+  } | null;
   isEditing: boolean;
   isVerifyingEmail: boolean;
   onInputChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;

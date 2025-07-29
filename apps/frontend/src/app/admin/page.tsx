@@ -1,6 +1,5 @@
 'use client';
 
-import SecureAdminAccess from '../../components/admin/SecureAdminAccess';
 import AdminLogin from '../../components/admin/AdminLogin';
 import AdminLoading from '../../components/admin/AdminLoading';
 import AdminHeader from '../../components/admin/AdminHeader';
@@ -12,39 +11,7 @@ import ConfirmationDialog from '../../components/admin/ConfirmationDialog';
 import { useAdminLogic } from '../../hooks/useAdminLogic';
 
 export default function AdminPage() {
-  const {
-    // State
-    users,
-    stats,
-    loadingData,
-    error,
-    selectedUser,
-    isDetailModalOpen,
-    searchTerm,
-    filterRole,
-    filterVerification,
-    isAuthenticated,
-    authError,
-    showConfirmDialog,
-    confirmAction,
-    isCheckingAuth,
-
-    // Handlers
-    handleAdminLogin,
-    handleAdminLogout,
-    openDetailModal,
-    closeDetailModal,
-    handleVerifyDocument,
-    confirmVerification,
-    cancelConfirmation,
-    setSearchTerm,
-    setFilterRole,
-    setFilterVerification
-  } = useAdminLogic();
-
-  return (
-      <AdminDashboard />
-  );
+  return <AdminDashboard />;
 }
 
 function AdminDashboard() {
