@@ -45,11 +45,8 @@ const FeatureSection = () => {
             transition={{ duration: 0.5, ease: "easeOut" as const }}
             className="flex flex-col items-center"
           >
-            {/* @ts-expect-error - React 19 type incompatibility with lucide-react */}
             {feature.iconName === "CreditCard" && <CreditCard size={48} color="#4AAEFF" />}
-            {/* @ts-expect-error - React 19 type incompatibility with lucide-react */}
             {feature.iconName === "Check" && <Check size={48} color="#4AAEFF" />}
-            {/* @ts-expect-error - React 19 type incompatibility with lucide-react */}
             {feature.iconName === "Rocket" && <Rocket size={48} color="#4AAEFF" />}
             <h3 className="font-semibold text-lg mt-4 text-[#222]">{feature.title}</h3>
             <p className="text-gray-500 text-sm mt-2 max-w-xs">
