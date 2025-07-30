@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import Navbar from '../../components/Navbar';
 import Footer from '../../components/Footer';
+import AnimatedLoader from '../../components/AnimatedLoader';
 import { useAuth } from '../../lib/auth';
 import { useRouter } from 'next/navigation';
 
@@ -27,6 +28,10 @@ function BookRide() {
       router.replace('/');
     }
   }, [user, loading, router]);
+
+  if (loading) {
+    return <AnimatedLoader />;
+  }
 
   if (!loading && !user) {
     return null;

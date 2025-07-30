@@ -7,6 +7,7 @@ import ProfileMessages from '../../components/profile/ProfileMessages';
 import ProfilePhotoSection from '../../components/profile/ProfilePhotoSection';
 import PassengerInformationSection from '../../components/profile/PassengerInformationSection';
 import DriverInformationSection from '../../components/profile/DriverInformationSection';
+import AnimatedLoader from '../../components/AnimatedLoader';
 import { useProfileLogic } from '../../hooks/useProfileLogic';
 
 export default function ProfilePage() {
@@ -49,14 +50,7 @@ export default function ProfilePage() {
   } = useProfileLogic();
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-white">
-        <Navbar />
-        <div className="flex items-center justify-center h-96">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#4AAAFF]"></div>
-        </div>
-      </div>
-    );
+    return <AnimatedLoader />;
   }
 
   // EARLY RETURN after all hooks

@@ -124,7 +124,7 @@ const Navbar = () => {
           >
             <span className="flex items-center gap-2">
               <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" className="text-gray-700"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
-              <span className="text-gray-500">Post a ride</span>
+              <span className="text-gray-500">Publish a ride</span>
             </span>
           </Button>
 

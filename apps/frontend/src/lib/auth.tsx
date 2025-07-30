@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useState, ReactNode } from
 import { User } from 'firebase/auth';
 import { auth } from '../firebase/config';
 import { getUserProfile, UserProfile, updateUserProfile } from './supabase';
+import AnimatedLoader from '../components/AnimatedLoader';
 
 interface AuthContextType {
   user: User | null;
@@ -81,7 +82,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <AuthContext.Provider value={{ user, userProfile, loading, signOut }}>
-      {children}
+      {loading ? <AnimatedLoader /> : children}
     </AuthContext.Provider>
   );
 };
