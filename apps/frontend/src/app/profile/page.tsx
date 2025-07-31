@@ -9,6 +9,7 @@ import PassengerInformationSection from '../../components/profile/PassengerInfor
 import DriverInformationSection from '../../components/profile/DriverInformationSection';
 import AnimatedLoader from '../../components/AnimatedLoader';
 import { useProfileLogic } from '../../hooks/useProfileLogic';
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 
 export default function ProfilePage() {
   const {
@@ -34,6 +35,11 @@ export default function ProfilePage() {
     isProfileImageLocked,
     isDLFieldLocked,
     isIDFieldLocked,
+    
+    // Confirm dialog
+    showConfirmDialog,
+    confirmDialogData,
+    setShowConfirmDialog,
     
     // Handlers
     handleInputChange,
@@ -118,6 +124,19 @@ export default function ProfilePage() {
           </div>
         </section>
       </main>
+      
+      {/* Confirm Dialog */}
+      {showConfirmDialog && confirmDialogData && (
+        <ConfirmDialog
+          isOpen={showConfirmDialog}
+          title={confirmDialogData.title}
+          message={confirmDialogData.message}
+          onConfirm={confirmDialogData.onConfirm}
+          onCancel={() => setShowConfirmDialog(false)}
+          type={confirmDialogData.type}
+        />
+      )}
+      
       <Footer />
     </div>
   );

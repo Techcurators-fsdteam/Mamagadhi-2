@@ -4,17 +4,16 @@ import { useState } from 'react';
 import Image from 'next/image';
 
 interface AdminLoginProps {
-  onLogin: (adminId: string, adminPassword: string) => void;
+  onLogin: (adminKey: string) => void;
   authError: string;
 }
 
 const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin, authError }) => {
-  const [adminId, setAdminId] = useState('');
-  const [adminPassword, setAdminPassword] = useState('');
+  const [adminKey, setAdminKey] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onLogin(adminId, adminPassword);
+    onLogin(adminKey);
   };
 
   return (
@@ -38,35 +37,20 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin, authError }) => {
           </p>
         </div>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div className="rounded-md shadow-sm -space-y-px">
+          <div className="rounded-md shadow-sm">
             <div>
-              <label htmlFor="admin-id" className="sr-only">
-                Admin ID
+              <label htmlFor="admin-key" className="sr-only">
+                Admin Key
               </label>
               <input
-                id="admin-id"
-                name="adminId"
-                type="text"
-                required
-                value={adminId}
-                onChange={(e) => setAdminId(e.target.value)}
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-[#4AAAFF] focus:border-[#4AAAFF] focus:z-10 sm:text-sm"
-                placeholder="Admin ID"
-              />
-            </div>
-            <div>
-              <label htmlFor="admin-password" className="sr-only">
-                Password
-              </label>
-              <input
-                id="admin-password"
-                name="password"
+                id="admin-key"
+                name="adminKey"
                 type="password"
                 required
-                value={adminPassword}
-                onChange={(e) => setAdminPassword(e.target.value)}
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-[#4AAAFF] focus:border-[#4AAAFF] focus:z-10 sm:text-sm"
-                placeholder="Password"
+                value={adminKey}
+                onChange={(e) => setAdminKey(e.target.value)}
+                className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-[#4AAAFF] focus:border-[#4AAAFF] focus:z-10 sm:text-sm"
+                placeholder="Admin Access Key"
               />
             </div>
           </div>

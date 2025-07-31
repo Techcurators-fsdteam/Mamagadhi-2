@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useState, ReactNode } from
 import { User } from 'firebase/auth';
 import { auth } from '../firebase/config';
 import { getUserProfile, UserProfile, updateUserProfile } from './supabase';
+import { ProfileProvider } from './profile-context';
 import AnimatedLoader from '../components/AnimatedLoader';
 
 interface AuthContextType {
@@ -11,13 +12,17 @@ interface AuthContextType {
   userProfile: UserProfile | null;
   loading: boolean;
   signOut: () => Promise<void>;
+  updateUserProfile: (updates: Partial<UserProfile>) => void;
+  refreshUserProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   userProfile: null,
   loading: true,
-  signOut: async () => {}
+  signOut: async () => {},
+  updateUserProfile: () => {},
+  refreshUserProfile: async () => {}
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -80,9 +85,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  // Function to update userProfile state globally
+  const updateUserProfileState = (updates: Partial<UserProfile>) => {
+    setUserProfile(prev => prev ? { ...prev, ...updates } : null);
+  };
+
+  // Function to refresh userProfile from database
+  const refreshUserProfile = async () => {
+    if (user) {
+      try {
+        const profile = await getUserProfile(user.uid);
+        setUserProfile(profile);
+      } catch (error) {
+        console.error('Error refreshing user profile:', error);
+      }
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, userProfile, loading, signOut }}>
-      {loading ? <AnimatedLoader /> : children}
+    <AuthContext.Provider value={{ 
+      user, 
+      userProfile, 
+      loading, 
+      signOut, 
+      updateUserProfile: updateUserProfileState,
+      refreshUserProfile 
+    }}>
+      <ProfileProvider user={user}>
+        {loading ? <AnimatedLoader /> : children}
+      </ProfileProvider>
     </AuthContext.Provider>
   );
 };

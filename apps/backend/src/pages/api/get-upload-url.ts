@@ -16,6 +16,16 @@ export default async function handler(
   req: NextApiRequest, 
   res: NextApiResponse<ApiResponse<UploadResponse & { uploadUrl: string; key: string }>>
 ) {
+  // Add CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  // Handle preflight OPTIONS request
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
   if (req.method !== 'POST') {
     return res.status(405).json({ 
       success: false, 
@@ -23,12 +33,33 @@ export default async function handler(
     });
   }
 
-  const { user_id, document_type, uuid, filetype } = req.body;
+  const { user_id, document_type, uuid, filetype, fileSize } = req.body;
   
   if (!user_id || !document_type || !uuid || !filetype) {
     return res.status(400).json({ 
       success: false, 
       error: 'Missing required fields: user_id, document_type, uuid, filetype' 
+    });
+  }
+
+  // Validate file size (2MB limit)
+  const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB in bytes
+  if (fileSize && fileSize > MAX_FILE_SIZE) {
+    return res.status(400).json({ 
+      success: false, 
+      error: 'File size exceeds 2MB limit. Please compress your file and try again.' 
+    });
+  }
+
+  // Validate file type
+  const allowedTypes = [
+    'image/jpeg', 'image/jpg', 'image/png', 'image/webp',
+    'application/pdf', 'image/bmp'
+  ];
+  if (!allowedTypes.includes(filetype)) {
+    return res.status(400).json({ 
+      success: false, 
+      error: 'Invalid file type. Only images (PNG, JPG, JPEG, WEBP, BMP) and PDF files are allowed.' 
     });
   }
 

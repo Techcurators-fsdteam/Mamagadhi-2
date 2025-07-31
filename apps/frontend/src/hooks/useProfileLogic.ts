@@ -2,14 +2,19 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../lib/auth';
+import { useProfile } from '../lib/profile-context';
 import { updateUserProfile, supabase } from '../lib/supabase';
 import { sendEmailVerification, updateProfile as updateFirebaseProfile } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
+import toast from 'react-hot-toast';
+import { validateFile, validateImageFile, formatFileSize } from '../lib/fileValidation';
+import { apiClient } from '../lib/api-client-enhanced';
 
 export const useProfileLogic = () => {
   const router = useRouter();
   const { user, loading } = useAuth();
+  const { userProfile, updateProfile, refreshProfile, setProfileUrl } = useProfile();
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isVerifyingEmail, setIsVerifyingEmail] = useState(false);
@@ -43,12 +48,20 @@ export const useProfileLogic = () => {
   const [dlUploadStatus, setDlUploadStatus] = useState<'idle' | 'uploading' | 'uploaded' | 'error'>('idle');
   const [idUploadStatus, setIdUploadStatus] = useState<'idle' | 'uploading' | 'uploaded' | 'error'>('idle');
   const [photoUploadStatus, setPhotoUploadStatus] = useState<'idle' | 'uploading' | 'uploaded' | 'error'>('idle');
+  
+  // Confirmation dialog state
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [confirmDialogData, setConfirmDialogData] = useState<{
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    type?: 'warning' | 'danger' | 'info';
+  } | null>(null);
 
   // Verification status from admin
   const [isIdVerified, setIsIdVerified] = useState(false);
   const [isDlVerified, setIsDlVerified] = useState(false);
   const [driverProfile, setDriverProfile] = useState<unknown>(null);
-  const [userProfile, setUserProfile] = useState<unknown>(null);
 
   // Fetch driver_profiles on load and after upload
   useEffect(() => {
@@ -82,21 +95,21 @@ export const useProfileLogic = () => {
   useEffect(() => {
     if (userProfile) {
       setFormData({
-        first_name: (userProfile as { [key: string]: unknown }).first_name as string,
-        last_name: (userProfile as { [key: string]: unknown }).last_name as string,
-        display_name: (userProfile as { [key: string]: unknown }).display_name as string,
-        phone: (userProfile as { [key: string]: unknown }).phone as string,
-        role: (userProfile as { [key: string]: unknown }).role as 'driver' | 'passenger' | 'both'
+        first_name: userProfile.first_name || '',
+        last_name: userProfile.last_name || '',
+        display_name: userProfile.display_name || '',
+        phone: userProfile.phone || '',
+        role: userProfile.role as 'driver' | 'passenger' | 'both'
       });
       setDriverData({
-        first_name: (userProfile as { [key: string]: unknown }).first_name as string,
-        last_name: (userProfile as { [key: string]: unknown }).last_name as string,
-        display_name: (userProfile as { [key: string]: unknown }).display_name as string,
-        phone: (userProfile as { [key: string]: unknown }).phone as string,
-        role: ((userProfile as { [key: string]: unknown }).role as string) === 'driver' ? 'driver' : 'both'
+        first_name: userProfile.first_name || '',
+        last_name: userProfile.last_name || '',
+        display_name: userProfile.display_name || '',
+        phone: userProfile.phone || '',
+        role: userProfile.role === 'driver' ? 'driver' : 'both'
       });
-      if (userProfile && typeof (userProfile as { [key: string]: unknown }).profile_url === 'string' && (userProfile as { [key: string]: unknown }).profile_url) {
-        setPhotoPreview((userProfile as { [key: string]: unknown }).profile_url as string);
+      if (userProfile.profile_url) {
+        setPhotoPreview(userProfile.profile_url);
       } else {
         setPhotoPreview(null);
       }
@@ -106,16 +119,14 @@ export const useProfileLogic = () => {
   useEffect(() => {
     const fetchUserProfile = async () => {
       if (user?.uid && supabase) {
-        const { data } = await supabase
-          .from('user_profiles')
-          .select('*')
-          .eq('id', user.uid)
-          .single();
-        setUserProfile(data);
       }
     };
-    fetchUserProfile();
-  }, [user]);
+    
+    // Call refresh function from auth context instead of local fetch
+    if (user?.uid) {
+      refreshProfile();
+    }
+  }, [user, refreshProfile]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -127,57 +138,97 @@ export const useProfileLogic = () => {
 
   // Helper to upload a file to R2 using pre-signed URL and update DB
   const uploadDocument = async (file: File, documentType: 'profile' | 'dl' | 'id') => {
-    if (!user) return { success: false, url: '' };
+    if (!user) return { success: false, url: '', error: 'User not authenticated' };
+    
+    // Validate file before upload
+    const validation = documentType === 'profile' 
+      ? validateImageFile(file) 
+      : validateFile(file);
+    
+    if (!validation.isValid) {
+      toast.error(validation.error || 'Invalid file');
+      return { success: false, url: '', error: validation.error };
+    }
+    
     const uuid = uuidv4();
-    // Step 1: Get pre-signed URL
-    const urlRes = await fetch('/api/get-upload-url', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+    
+    try {
+      // Step 1: Get pre-signed URL using API client
+      const urlResult = await apiClient.getUploadUrl({
         user_id: user.uid,
         document_type: documentType,
         uuid,
         filetype: file.type,
-      }),
-    });
-    const urlData = await urlRes.json();
-    if (!urlData.uploadUrl) return { success: false, error: urlData.error };
-    // Step 2: Upload file to R2
-    const putRes = await fetch(urlData.uploadUrl, {
-      method: 'PUT',
-      headers: { 'Content-Type': file.type },
-      body: file,
-    });
-    if (!putRes.ok) return { success: false, error: 'Failed to upload to R2' };
-    // Step 3: Record in DB
-    const dbRes = await fetch('/api/upload-document', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+        fileSize: file.size,
+      });
+      
+      if (!urlResult.success || !urlResult.data?.uploadUrl) {
+        return { success: false, error: urlResult.error || 'No upload URL received' };
+      }
+      
+      // Step 2: Upload file to R2
+      const putRes = await fetch(urlResult.data.uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      });
+      
+      if (!putRes.ok) {
+        const errorText = await putRes.text();
+        return { success: false, error: `Failed to upload to R2: ${errorText}` };
+      }
+      
+      // Step 3: Record in DB using API client
+      const dbResult = await apiClient.uploadDocument({
         user_id: user.uid,
         document_type: documentType,
-        publicUrl: urlData.publicUrl,
-      }),
-    });
-    const dbData = await dbRes.json();
-    if (!dbData.success) return { success: false, error: dbData.error };
-    return { success: true, url: urlData.publicUrl };
+        publicUrl: urlResult.data.url,
+      });
+      
+      if (!dbResult.success) {
+        return { success: false, error: dbResult.error || 'Database update failed' };
+      }
+      return { success: true, url: urlResult.data.url };
+      
+    } catch (error) {
+      console.error('Upload error:', error);
+      return { 
+        success: false, 
+        error: `Upload failed: ${error instanceof Error ? error.message : 'Unknown error'}` 
+      };
+    }
   };
 
   // File upload handlers
   const handleDrivingLicenceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       if (!isDLFieldLocked) {
-        const confirmed = window.confirm(
-          '⚠️ Important Notice:\n\nYou can only upload your driving license ONCE. Once uploaded, you cannot change or replace this document.\n\nPlease ensure you have selected the correct file before proceeding.\n\nDo you want to continue?'
-        );
-        if (confirmed) {
-          setDrivingLicenceFile(e.target.files[0]);
-          setDlUploadStatus('idle');
-        } else {
-          // Reset the input if user cancels
+        const file = e.target.files[0];
+        
+        // Validate file before showing confirmation
+        const validation = validateFile(file);
+        if (!validation.isValid) {
+          toast.error(validation.error || 'Invalid file');
           e.target.value = '';
+          return;
         }
+
+        setConfirmDialogData({
+          title: 'Upload Driving License',
+          message: `⚠️ Important Notice:\n\nYou can only upload your driving license ONCE. Once uploaded, you cannot change or replace this document.\n\nFile: ${file.name}\nSize: ${formatFileSize(file.size)}\n\nPlease ensure you have selected the correct file before proceeding.\n\nDo you want to continue?`,
+          onConfirm: () => {
+            setDrivingLicenceFile(file);
+            setDlUploadStatus('idle');
+            setShowConfirmDialog(false);
+            setConfirmDialogData(null);
+          },
+          type: 'warning'
+        });
+        setShowConfirmDialog(true);
+        
+        // Reset the input - will be set again if user confirms
+        e.target.value = '';
       }
     }
   };
@@ -185,16 +236,31 @@ export const useProfileLogic = () => {
   const handleIdCardChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       if (!isIDFieldLocked) {
-        const confirmed = window.confirm(
-          '⚠️ Important Notice:\n\nYou can only upload your ID document ONCE. Once uploaded, you cannot change or replace this document.\n\nPlease ensure you have selected the correct file before proceeding.\n\nDo you want to continue?'
-        );
-        if (confirmed) {
-          setIdCardFile(e.target.files[0]);
-          setIdUploadStatus('idle');
-        } else {
-          // Reset the input if user cancels
+        const file = e.target.files[0];
+        
+        // Validate file before showing confirmation
+        const validation = validateFile(file);
+        if (!validation.isValid) {
+          toast.error(validation.error || 'Invalid file');
           e.target.value = '';
+          return;
         }
+
+        setConfirmDialogData({
+          title: 'Upload ID Document',
+          message: `⚠️ Important Notice:\n\nYou can only upload your ID document ONCE. Once uploaded, you cannot change or replace this document.\n\nFile: ${file.name}\nSize: ${formatFileSize(file.size)}\n\nPlease ensure you have selected the correct file before proceeding.\n\nDo you want to continue?`,
+          onConfirm: () => {
+            setIdCardFile(file);
+            setIdUploadStatus('idle');
+            setShowConfirmDialog(false);
+            setConfirmDialogData(null);
+          },
+          type: 'warning'
+        });
+        setShowConfirmDialog(true);
+        
+        // Reset the input - will be set again if user confirms
+        e.target.value = '';
       }
     }
   };
@@ -202,30 +268,35 @@ export const useProfileLogic = () => {
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Check file type
-      const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg'];
-      if (!allowedTypes.includes(file.type)) {
-        setError('Please select only PNG or JPG files for profile photo.');
+      // Validate image file
+      const validation = validateImageFile(file);
+      if (!validation.isValid) {
+        toast.error(validation.error || 'Invalid file');
+        e.target.value = '';
         return;
       }
+      
       setPhotoFile(file);
       setPhotoPreview(URL.createObjectURL(file));
       setError(''); // Clear any previous errors
+      toast.success(`Photo selected: ${file.name} (${formatFileSize(file.size)})`);
     }
   };
 
   // Lock logic
-  const isProfileImageLocked = !!(userProfile && (userProfile as { [key: string]: unknown }).profile_url);
-  const isDLFieldLocked = !!(driverProfile && (driverProfile as { [key: string]: unknown }).dl_url);
-  const isIDFieldLocked = !!(driverProfile && (driverProfile as { [key: string]: unknown }).id_url);
+  const isProfileImageLocked = !!(userProfile && userProfile.profile_url);
+  const isDLFieldLocked = !!(driverProfile && (driverProfile as any).dl_url);
+  const isIDFieldLocked = !!(driverProfile && (driverProfile as any).id_url);
 
   const handleUploadDL = async () => {
     if (!drivingLicenceFile) return;
     setDlUploadStatus('uploading');
+    toast.loading('Uploading driving license...', { id: 'dl-upload' });
+    
     const result = await uploadDocument(drivingLicenceFile, 'dl');
     if (result.success) {
       setDlUploadStatus('uploaded');
-      setMessage('Driving Licence uploaded successfully!');
+      toast.success('Driving license uploaded successfully!', { id: 'dl-upload' });
       setDrivingLicenceFile(null); // Clear file input
       // Refetch driver profile to persist lock state
       if (user?.uid && supabase) {
@@ -238,17 +309,19 @@ export const useProfileLogic = () => {
       }
     } else {
       setDlUploadStatus('error');
-      setError(result.error || 'Failed to upload Driving Licence.');
+      toast.error(result.error || 'Failed to upload driving license', { id: 'dl-upload' });
     }
   };
 
   const handleUploadID = async () => {
     if (!idCardFile) return;
     setIdUploadStatus('uploading');
+    toast.loading('Uploading ID document...', { id: 'id-upload' });
+    
     const result = await uploadDocument(idCardFile, 'id');
     if (result.success) {
       setIdUploadStatus('uploaded');
-      setMessage('ID Card uploaded successfully!');
+      toast.success('ID document uploaded successfully!', { id: 'id-upload' });
       setIdCardFile(null); // Clear file input
       // Refetch driver profile to persist lock state
       if (user?.uid && supabase) {
@@ -261,31 +334,30 @@ export const useProfileLogic = () => {
       }
     } else {
       setIdUploadStatus('error');
-      setError(result.error || 'Failed to upload ID Card.');
+      toast.error(result.error || 'Failed to upload ID document', { id: 'id-upload' });
     }
   };
 
   const handleUploadPhoto = async () => {
     if (!photoFile) return;
     setPhotoUploadStatus('uploading');
+    toast.loading('Uploading profile photo...', { id: 'photo-upload' });
+    
     const result = await uploadDocument(photoFile, 'profile');
     if (result.success) {
       setPhotoUploadStatus('uploaded');
-      setMessage('Profile photo uploaded successfully!');
+      toast.success('Profile photo uploaded successfully!', { id: 'photo-upload' });
       setPhotoFile(null); // Clear file input
-      setPhotoPreview(null);
-      // Refetch user profile to update avatar and lock state
-      if (user?.uid && supabase) {
-        const { data } = await supabase
-          .from('user_profiles')
-          .select('*')
-          .eq('id', user.uid)
-          .single();
-        setUserProfile(data);
+      
+      // Update global profile state with new photo URL
+      if (result.url) {
+        setPhotoPreview(result.url); // Show the uploaded image immediately
+        setProfileUrl(result.url);
+        updateProfile({ profile_url: result.url });
       }
     } else {
       setPhotoUploadStatus('error');
-      // Optionally set error message
+      toast.error(result.error || 'Failed to upload profile photo', { id: 'photo-upload' });
     }
   };
 
@@ -305,11 +377,20 @@ export const useProfileLogic = () => {
         phone: formData.phone,
         role: formData.role
       });
-      setMessage('Profile updated successfully!');
+      
+      // Update global profile state immediately
+      updateProfile({
+        first_name: formData.first_name,
+        last_name: formData.last_name,
+        display_name: formData.display_name,
+        phone: formData.phone,
+        role: formData.role
+      });
+      
+      toast.success('Profile updated successfully!');
       setIsEditing(false);
-      setTimeout(() => setMessage(''), 3000);
-    } catch {
-      setError('Failed to update profile. Please try again.');
+    } catch (error) {
+      toast.error('Failed to update profile. Please try again.');
     } finally {
       setIsSaving(false);
     }
@@ -333,21 +414,21 @@ export const useProfileLogic = () => {
   const handleCancel = () => {
     if (userProfile) {
       setFormData({
-        first_name: (userProfile as { [key: string]: unknown }).first_name as string,
-        last_name: (userProfile as { [key: string]: unknown }).last_name as string,
-        display_name: (userProfile as { [key: string]: unknown }).display_name as string,
-        phone: (userProfile as { [key: string]: unknown }).phone as string,
-        role: (userProfile as { [key: string]: unknown }).role as 'driver' | 'passenger' | 'both'
+        first_name: userProfile.first_name || '',
+        last_name: userProfile.last_name || '',
+        display_name: userProfile.display_name || '',
+        phone: userProfile.phone || '',
+        role: userProfile.role as 'driver' | 'passenger' | 'both'
       });
       setDriverData({
-        first_name: (userProfile as { [key: string]: unknown }).first_name as string,
-        last_name: (userProfile as { [key: string]: unknown }).last_name as string,
-        display_name: (userProfile as { [key: string]: unknown }).display_name as string,
-        phone: (userProfile as { [key: string]: unknown }).phone as string,
-        role: ((userProfile as { [key: string]: unknown }).role as string) === 'driver' ? 'driver' : 'both'
+        first_name: userProfile.first_name || '',
+        last_name: userProfile.last_name || '',
+        display_name: userProfile.display_name || '',
+        phone: userProfile.phone || '',
+        role: userProfile.role === 'driver' ? 'driver' : 'both'
       });
-      if (userProfile && typeof (userProfile as { [key: string]: unknown }).profile_url === 'string' && (userProfile as { [key: string]: unknown }).profile_url) {
-        setPhotoPreview((userProfile as { [key: string]: unknown }).profile_url as string);
+      if (userProfile && userProfile.profile_url) {
+        setPhotoPreview(userProfile.profile_url);
       } else {
         setPhotoPreview(null);
       }
@@ -384,6 +465,10 @@ export const useProfileLogic = () => {
     isIDFieldLocked,
     photoInputRef,
     
+    // Confirm dialog
+    showConfirmDialog,
+    confirmDialogData,
+    
     // Handlers
     handleInputChange,
     handlePhotoChange,
@@ -397,6 +482,12 @@ export const useProfileLogic = () => {
     handleCancel,
     setIsEditing,
     setError,
-    setMessage
+    setMessage,
+    setShowConfirmDialog: (show: boolean) => {
+      setShowConfirmDialog(show);
+      if (!show) {
+        setConfirmDialogData(null);
+      }
+    }
   };
 };

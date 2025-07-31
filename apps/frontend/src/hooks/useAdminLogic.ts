@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { UserProfile, DriverProfile } from 'shared-types';
-import { supabase } from '../lib/supabase';
+import { apiClient } from '../lib/api-client-enhanced';
+import { toast } from 'react-hot-toast';
 
 interface CombinedUserData {
   userProfile: UserProfile;
@@ -50,9 +51,8 @@ export const useAdminLogic = () => {
     userName: string;
   } | null>(null);
 
-  // Admin credentials (in production, use environment variables)
-  const ADMIN_ID = process.env.NEXT_PUBLIC_ADMIN_ID || 'admin';
-  const ADMIN_PASSWORD = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'admin123';
+  // Admin credentials
+  const ADMIN_KEY = process.env.NEXT_PUBLIC_ADMIN_SECRET_KEY || 'admin123';
   const SESSION_KEY = 'mamagadhi_admin_session';
   const SESSION_DURATION = 24 * 60 * 60 * 1000; // 24 hours
 
@@ -90,19 +90,28 @@ export const useAdminLogic = () => {
     }
   }, [isAuthenticated]);
 
-  const handleAdminLogin = (adminId: string, adminPassword: string) => {
-    if (adminId === ADMIN_ID && adminPassword === ADMIN_PASSWORD) {
-      setIsAuthenticated(true);
-      setAuthError('');
-      
-      // Store session in localStorage
-      const sessionData = {
-        timestamp: Date.now(),
-        isAdmin: true
-      };
-      localStorage.setItem(SESSION_KEY, JSON.stringify(sessionData));
-    } else {
-      setAuthError('Invalid admin credentials');
+  const handleAdminLogin = async (adminKey: string) => {
+    try {
+      const result = await apiClient.adminAuthenticate(adminKey);
+      if (result.success) {
+        setIsAuthenticated(true);
+        setAuthError('');
+        
+        // Store session in localStorage
+        const sessionData = {
+          timestamp: Date.now(),
+          isAdmin: true,
+          adminKey
+        };
+        localStorage.setItem(SESSION_KEY, JSON.stringify(sessionData));
+        toast.success('Admin authenticated successfully');
+      } else {
+        setAuthError(result.error || 'Invalid admin credentials');
+        toast.error('Invalid admin credentials');
+      }
+    } catch (error) {
+      setAuthError('Authentication failed');
+      toast.error('Authentication failed');
     }
   };
 
@@ -113,34 +122,17 @@ export const useAdminLogic = () => {
 
   const fetchStats = async () => {
     try {
-      if (!supabase) {
-        throw new Error('Database not available');
-      }
+      const sessionData = localStorage.getItem(SESSION_KEY);
+      if (!sessionData) return;
       
-      // Fetch all user profiles for stats
-      const { data: allUsers, error: statsError } = await supabase
-        .from('user_profiles')
-        .select('role, is_email_verified, is_phone_verified');
-
-      if (statsError) throw statsError;
-
-      // Fetch all driver profiles for stats
-      const { data: allDrivers, error: driversError } = await supabase
-        .from('driver_profiles')
-        .select('dl_verified, id_verified');
-
-      if (driversError) throw driversError;
-
-      const stats = {
-        totalUsers: allUsers?.length || 0,
-        totalDrivers: allUsers?.filter(u => u.role === 'driver' || u.role === 'both').length || 0,
-        verifiedUsers: allUsers?.filter(u => u.is_email_verified && u.is_phone_verified).length || 0,
-        driversWithDocs: allDrivers?.length || 0,
-        verifiedDLs: allDrivers?.filter(d => d.dl_verified).length || 0,
-        verifiedIDs: allDrivers?.filter(d => d.id_verified).length || 0
-      };
-
-      setStats(stats);
+      const { adminKey } = JSON.parse(sessionData);
+      const result = await apiClient.getAdminStats(adminKey);
+      
+      if (result.success && result.data) {
+        setStats(result.data);
+      } else {
+        setError(result.error || 'Failed to fetch statistics');
+      }
     } catch (err) {
       console.error('Error fetching stats:', err);
       setError('Failed to fetch statistics');
@@ -151,36 +143,18 @@ export const useAdminLogic = () => {
     try {
       setLoadingData(true);
       
-      if (!supabase) {
-        throw new Error('Database not available');
-      }
+      const sessionData = localStorage.getItem(SESSION_KEY);
+      if (!sessionData) return;
       
-      // Fetch all user profiles from Supabase
-      const { data: userProfiles, error: userError } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (userError) throw userError;
-
-      // Fetch all driver profiles from Supabase
-      const { data: driverProfiles, error: driverError } = await supabase
-        .from('driver_profiles')
-        .select('*');
-
-      if (driverError) throw driverError;
-
-      // Combine the data
-      const combinedData: CombinedUserData[] = userProfiles?.map(userProfile => {
-        const driverProfile = driverProfiles?.find(dp => dp.user_profile_id === userProfile.id);
-        return {
-          userProfile,
-          driverProfile
-        };
-      }) || [];
-
-      setUsers(combinedData);
-      setError(''); // Clear any previous errors
+      const { adminKey } = JSON.parse(sessionData);
+      const result = await apiClient.getAllUsers(adminKey);
+      
+      if (result.success && result.data) {
+        setUsers(result.data);
+        setError(''); // Clear any previous errors
+      } else {
+        setError(result.error || 'Failed to fetch users');
+      }
     } catch (err) {
       setError('Failed to fetch user data from database');
       console.error('Error fetching users:', err);
@@ -205,73 +179,69 @@ export const useAdminLogic = () => {
     if (!confirmAction) return;
     
     try {
-      if (!supabase) {
-        throw new Error('Database not available');
-      }
+      const sessionData = localStorage.getItem(SESSION_KEY);
+      if (!sessionData) return;
       
+      const { adminKey } = JSON.parse(sessionData);
       const { userId, documentType, verified } = confirmAction;
-      const updateField = documentType === 'id' ? 'id_verified' : 'dl_verified';
       
-      // Update verification status in Supabase
-      const { error } = await supabase
-        .from('driver_profiles')
-        .update({ 
-          [updateField]: verified,
-          updated_at: new Date().toISOString() 
-        })
-        .eq('user_profile_id', userId);
+      // Update verification status via API
+      const result = await apiClient.updateUserVerification(adminKey, userId, documentType, verified);
 
-      if (error) throw error;
+      if (result.success) {
+        // Update local state without refetching
+        setUsers(prevUsers => 
+          prevUsers.map(userData => {
+            if (userData.userProfile.id === userId && userData.driverProfile) {
+              const updatedDriverProfile = { ...userData.driverProfile };
+              if (documentType === 'id') {
+                updatedDriverProfile.id_verified = verified;
+              } else {
+                updatedDriverProfile.dl_verified = verified;
+              }
+              return {
+                ...userData,
+                driverProfile: updatedDriverProfile
+              };
+            }
+            return userData;
+          })
+        );
+        
+        // Update selected user if modal is open
+        if (selectedUser && selectedUser.userProfile.id === userId) {
+          setSelectedUser(prevSelected => {
+            if (prevSelected?.driverProfile) {
+              const updatedDriverProfile = { ...prevSelected.driverProfile };
+              if (documentType === 'id') {
+                updatedDriverProfile.id_verified = verified;
+              } else {
+                updatedDriverProfile.dl_verified = verified;
+              }
+              return {
+                ...prevSelected,
+                driverProfile: updatedDriverProfile
+              };
+            }
+            return prevSelected;
+          });
+        }
 
-      // Update local state without refetching
-      setUsers(prevUsers => 
-        prevUsers.map(userData => {
-          if (userData.userProfile.id === userId && userData.driverProfile) {
-            const updatedDriverProfile = { ...userData.driverProfile };
-            if (documentType === 'id') {
-              updatedDriverProfile.id_verified = verified;
-            } else {
-              updatedDriverProfile.dl_verified = verified;
-            }
-            return {
-              ...userData,
-              driverProfile: updatedDriverProfile
-            };
-          }
-          return userData;
-        })
-      );
-      
-      // Update selected user if modal is open
-      if (selectedUser && selectedUser.userProfile.id === userId) {
-        setSelectedUser(prevSelected => {
-          if (prevSelected?.driverProfile) {
-            const updatedDriverProfile = { ...prevSelected.driverProfile };
-            if (documentType === 'id') {
-              updatedDriverProfile.id_verified = verified;
-            } else {
-              updatedDriverProfile.dl_verified = verified;
-            }
-            return {
-              ...prevSelected,
-              driverProfile: updatedDriverProfile
-            };
-          }
-          return prevSelected;
-        });
+        // Update stats
+        fetchStats();
+        
+        // Close confirmation dialog
+        setShowConfirmDialog(false);
+        setConfirmAction(null);
+
+        toast.success(`${verified ? 'Verified' : 'Revoked'} ${documentType.toUpperCase()} for user`);
+      } else {
+        throw new Error(result.error || 'Failed to update verification');
       }
-
-      // Update stats
-      fetchStats();
-      
-      // Close confirmation dialog
-      setShowConfirmDialog(false);
-      setConfirmAction(null);
-
-      console.log(`${verified ? 'Verified' : 'Revoked'} ${documentType} for user ${userId}`);
     } catch (err) {
       setError(`Failed to update ${confirmAction.documentType} verification status`);
       console.error('Error updating verification:', err);
+      toast.error(`Failed to update ${confirmAction.documentType} verification`);
       setShowConfirmDialog(false);
       setConfirmAction(null);
     }
