@@ -67,7 +67,7 @@ export default function ContactUsPage() {
     <>
       <Navbar />
 
-      <div className="min-h-[calc(100vh-120px)] flex items-center justify-center bg-[#f8fafc]">
+      <div className="min-h-[calc(100vh-120px)] flex items-center justify-center bg-white">
         <main className="max-w-[600px] w-full mx-auto p-8 font-sans text-slate-800 rounded-2xl text-center">
           <h1 className="text-4xl font-extrabold text-[#4AAAFF] mb-4 tracking-wide text-center">
             Contact Us

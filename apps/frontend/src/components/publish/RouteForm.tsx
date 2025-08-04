@@ -16,6 +16,8 @@ interface RouteFormProps {
   formData: {
     origin: string;
     destination: string;
+    originLandmark: string;
+    destinationLandmark: string;
   };
   stopovers: Stopover[];
   originSearch: EnhancedSearchLocation[];
@@ -127,6 +129,24 @@ const RouteForm: React.FC<RouteFormProps> = ({
         )}
       </div>
 
+      {/* Origin Landmark */}
+      <div>
+        <label className="block text-sm font-medium text-gray-500 mb-2">
+          Landmark near origin 
+        </label>
+        <div className="relative">
+          <div className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400">
+            <MapPin className="w-4 h-4" />
+          </div>
+          <Input
+            value={formData.originLandmark}
+            onChange={(e) => onInputChange('originLandmark', e.target.value)}
+            placeholder="e.g., Near Central Mall, Behind City Hospital..."
+            className="w-full h-12 pl-12 pr-4 rounded-2xl border border-gray-200 focus:border-[#4AAAFF] focus:ring-2 focus:ring-blue-100 transition-all duration-200"
+          />
+        </div>
+      </div>
+
       {/* Destination Input */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -140,6 +160,24 @@ const RouteForm: React.FC<RouteFormProps> = ({
           onDestinationSearch,
           <div className="w-3 h-3 rounded-full bg-red-500"></div>
         )}
+      </div>
+
+      {/* Destination Landmark */}
+      <div>
+        <label className="block text-sm font-medium text-gray-500 mb-2">
+          Landmark near destination 
+        </label>
+        <div className="relative">
+          <div className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400">
+            <MapPin className="w-4 h-4" />
+          </div>
+          <Input
+            value={formData.destinationLandmark}
+            onChange={(e) => onInputChange('destinationLandmark', e.target.value)}
+            placeholder="e.g., Near Main Bus Stand, Opposite Park Plaza..."
+            className="w-full h-12 pl-12 pr-4 rounded-2xl border border-gray-200 focus:border-[#4AAAFF] focus:ring-2 focus:ring-blue-100 transition-all duration-200"
+          />
+        </div>
       </div>
 
       {/* Stopovers */}

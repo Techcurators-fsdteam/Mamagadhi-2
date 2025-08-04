@@ -22,6 +22,8 @@ interface RouteStepProps {
   formData: {
     origin: string;
     destination: string;
+    originLandmark: string;
+    destinationLandmark: string;
   };
   stopovers: Stopover[];
   originCoords: [number, number] | null;

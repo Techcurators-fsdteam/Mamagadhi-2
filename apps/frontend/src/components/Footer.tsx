@@ -1,39 +1,75 @@
 import React from 'react';
+import Link from 'next/link';
 
 const Footer = () => {
   return (
-    <footer className="w-full bg-[#4AAEFF] text-white px-4 sm:px-8 pt-10 pb-8" style={{ minHeight: 200 }}>
+    <footer className="w-full bg-[#4AAEFF] text-white px-4 sm:px-8 pt-10 pb-8">
       <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
 
-        {/* Top Routes */}
+        {/* Main Routes */}
         <div>
-          <h3 className="text-xl font-semibold mb-4">Top Ride Sharing Routes</h3>
+          <h3 className="text-xl font-semibold mb-4">Explore Mamagadhi</h3>
           <ul className="space-y-2 text-sm sm:text-base">
-            <li>Delhi → Chandigarh</li>
-            <li>Mumbai → Pune</li>
-            <li>Kanpur → Lucknow</li>
-            <li>Bengaluru → Chennai</li>
-            <li>Pune → Mumbai</li>
-            <li>All carpool routes</li>
-            <li>All carpool destinations</li>
+            <li>
+              <Link href="/" className="hover:underline transition-all">
+                Home
+              </Link>
+            </li>
+            <li>
+              <Link href="/book" className="hover:underline transition-all">
+                Book a Ride
+              </Link>
+            </li>
+            <li>
+              <Link href="/publish" className="hover:underline transition-all">
+                Publish a Ride
+              </Link>
+            </li>
+            <li>
+              <Link href="/rides" className="hover:underline transition-all">
+                Browse Rides
+              </Link>
+            </li>
+            <li>
+              <Link href="/profile" className="hover:underline transition-all">
+                My Profile
+              </Link>
+            </li>
           </ul>
         </div>
 
-        {/* About Section */}
+        {/* Information */}
         <div>
-          <h3 className="text-xl font-semibold mb-4">About</h3>
+          <h3 className="text-xl font-semibold mb-4">Information</h3>
           <ul className="space-y-2 text-sm sm:text-base">
-            <li>How It Works</li>
-            <li>About Us</li>
-            <li>Help Centre</li>
-            <li>Press</li>
+            <li>
+              <Link href="/info/about-us" className="hover:underline transition-all">
+                About Us
+              </Link>
+            </li>
+            <li>
+              <Link href="/info/contact-us" className="hover:underline transition-all">
+                Contact Us
+              </Link>
+            </li>
+            <li>
+              <Link href="/info/privacy-policy" className="hover:underline transition-all">
+                Privacy Policy
+              </Link>
+            </li>
           </ul>
         </div>
 
-        {/* Language & Socials */}
+        {/* Contact & Social */}
         <div className="flex flex-col items-start md:items-end">
-          <div className="bg-white text-[#4AAEFF] rounded-full px-5 py-2 text-sm font-medium mb-4">
-            Language - English (India)
+          <div className="mb-4">
+            <h3 className="text-lg font-semibold mb-2">Connect With Us</h3>
+            <p className="text-sm mb-2">
+              Email: <a href="mailto:venuch@mamaghadi.com" className="hover:underline">venuch@mamaghadi.com</a>
+            </p>
+            <p className="text-sm">
+              Phone: <a href="tel:+919963477751" className="hover:underline">+91 99634 77751</a>
+            </p>
           </div>
           <div className="flex gap-4">
             <a href="#" aria-label="Facebook" className="hover:opacity-80 transition">
@@ -53,7 +89,7 @@ const Footer = () => {
 
       </div>
       <div className="mt-8 text-center text-xs text-white/80">
-        © {new Date().getFullYear()} Your Company Name. All rights reserved.
+        © {new Date().getFullYear()} Mamagadhi. All rights reserved.
       </div>
     </footer>
   );

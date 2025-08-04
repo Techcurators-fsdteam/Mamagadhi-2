@@ -1,0 +1,243 @@
+import { NextApiRequest, NextApiResponse } from 'next';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
+// Helper function to combine date and time into ISO string
+const combineDateAndTime = (date: string, time: string): string => {
+  if (!date || !time) return new Date().toISOString();
+  
+  try {
+    const dateObj = new Date(date);
+    const timeParts = time.split(':');
+    const hours = parseInt(timeParts[0] || '0', 10);
+    const minutes = parseInt(timeParts[1] || '0', 10);
+    
+    dateObj.setHours(hours, minutes, 0, 0);
+    return dateObj.toISOString();
+  } catch (error) {
+    console.error('Error combining date and time:', error);
+    return new Date().toISOString();
+  }
+};
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  // Add CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  // Handle preflight OPTIONS request
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  try {
+    const {
+      formData,
+      bookingDetails,
+      stopovers,
+      originCoords,
+      destinationCoords,
+      originState,
+      destinationState,
+      vehicleType,
+      driverId
+    } = req.body;
+
+    console.log('=== RIDE SUBMISSION RECEIVED ===');
+    console.log('📍 Received ride data:', {
+      formData,
+      originCoords,
+      destinationCoords,
+      originState,
+      destinationState,
+      stopovers: stopovers?.length || 0,
+      driverId,
+      vehicleType,
+      bookingDetails
+    });
+
+    // Validate required fields
+    if (!formData?.origin || !formData?.destination || !bookingDetails?.date || !bookingDetails?.departureTime || !driverId) {
+      return res.status(400).json({
+        error: 'Missing required fields',
+        details: 'Origin, destination, departure date, departure time, and driver ID are required'
+      });
+    }
+
+    // Validate price
+    const pricePerSeat = parseFloat(bookingDetails.pricePerSeat);
+    if (isNaN(pricePerSeat) || pricePerSeat <= 0) {
+      return res.status(400).json({
+        error: 'Invalid price per seat'
+      });
+    }
+
+    // Calculate seats based on vehicle type
+    const getSeatsFromVehicleType = (type: string): number => {
+      const seatMap: { [key: string]: number } = {
+        'bike': 1,
+        'sedan': 4,
+        'suv': 6,
+        'van': 6,
+        'minibus': 10,
+        'bus': 16
+      };
+      return seatMap[type] || 4;
+    };
+
+    const totalSeats = getSeatsFromVehicleType(vehicleType);
+
+    // Prepare origin and destination - ONLY landmarks, not full location names
+    const originText = formData.originLandmark || formData.origin || '';
+    const destinationText = formData.destinationLandmark || formData.destination || '';
+
+    // Prepare ride data
+    const rideInsertData: any = {
+      vehicle_type: vehicleType,
+      origin: originText,
+      destination: destinationText,
+      origin_state: originState || null,
+      destination_state: destinationState || null,
+      departure_time: combineDateAndTime(bookingDetails.date, bookingDetails.departureTime),
+      arrival_time: combineDateAndTime(bookingDetails.date, bookingDetails.arrivalTime),
+      seats_total: totalSeats,
+      seats_available: totalSeats,
+      price_per_seat: pricePerSeat,
+      driver_id: driverId, // This is the user_id from user_profiles table
+      status: 'open'
+    };
+
+    // Convert coordinates to PostGIS geography format and add to the insert data
+    if (originCoords && Array.isArray(originCoords) && originCoords.length === 2) {
+      // Use ST_MakePoint for geography - PostGIS function
+      rideInsertData.origin_geog = `POINT(${originCoords[1]} ${originCoords[0]})`;
+      console.log('🗺️ Origin coordinates converted:', originCoords, '→', rideInsertData.origin_geog);
+    }
+    
+    if (destinationCoords && Array.isArray(destinationCoords) && destinationCoords.length === 2) {
+      rideInsertData.destination_geog = `POINT(${destinationCoords[1]} ${destinationCoords[0]})`;
+      console.log('🗺️ Destination coordinates converted:', destinationCoords, '→', rideInsertData.destination_geog);
+    }
+
+    console.log('💾 Prepared ride insert data:', rideInsertData);
+
+    // Insert the ride with all data including geography
+    const { data: rideData, error: rideError } = await supabase
+      .from('rides')
+      .insert(rideInsertData)
+      .select('ride_id')
+      .single();
+
+    if (rideError) {
+      console.error('❌ Error creating ride:', rideError);
+      return res.status(500).json({
+        error: 'Failed to create ride',
+        details: rideError.message
+      });
+    }
+
+    console.log('✅ Ride successfully created with ID:', rideData.ride_id);
+    const rideId = rideData.ride_id;
+
+    // Insert stopovers if any
+    if (stopovers && Array.isArray(stopovers) && stopovers.length > 0) {
+      const stopoverData = stopovers.map((stopover: any, index: number) => {
+        const stopData: any = {
+          ride_id: rideId,
+          sequence: index + 1,
+          landmark: stopover.name || null
+        };
+
+        // Add geography data if coordinates are available
+        if (stopover.coordinates && Array.isArray(stopover.coordinates) && stopover.coordinates.length === 2) {
+          stopData.stop_geog = `POINT(${stopover.coordinates[1]} ${stopover.coordinates[0]})`;
+        }
+
+        return stopData;
+      });
+
+      const { error: stopError } = await supabase
+        .from('ride_stops')
+        .insert(stopoverData);
+
+      if (stopError) {
+        console.error('Error creating stopovers:', stopError);
+        // Continue without stopovers - not critical for ride creation
+      }
+    }
+
+    // Insert stopovers if any
+    if (stopovers && Array.isArray(stopovers) && stopovers.length > 0) {
+      const stopoverData = stopovers.map((stopover: any, index: number) => {
+        const stopData: any = {
+          ride_id: rideId,
+          sequence: index + 1,
+          landmark: stopover.name || null
+        };
+
+        // Add geography data if coordinates are available
+        if (stopover.coordinates && Array.isArray(stopover.coordinates) && stopover.coordinates.length === 2) {
+          stopData.stop_geog = `POINT(${stopover.coordinates[1]} ${stopover.coordinates[0]})`;
+        }
+
+        return stopData;
+      });
+
+      const { error: stopError } = await supabase
+        .from('ride_stops')
+        .insert(stopoverData);
+
+      if (stopError) {
+        console.error('❌ Error creating stopovers:', stopError);
+        // Continue without stopovers - not critical for ride creation
+        console.warn('⚠️ Stopovers were not saved, but ride was created successfully');
+      } else {
+        console.log('✅ Stopovers successfully created:', stopovers.length, 'stops');
+      }
+    }
+
+    console.log('🎉 RIDE PUBLISHED SUCCESSFULLY!');
+    console.log('📊 Final response data:', {
+      ride_id: rideId,
+      origin: originText,
+      destination: destinationText,
+      departure_time: rideInsertData.departure_time,
+      arrival_time: rideInsertData.arrival_time,
+      seats_total: totalSeats,
+      price_per_seat: pricePerSeat,
+      stopovers_count: stopovers?.length || 0
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Ride published successfully!',
+      rideId: rideId,
+      data: {
+        ride_id: rideId,
+        origin: originText,
+        destination: destinationText,
+        departure_time: rideInsertData.departure_time,
+        arrival_time: rideInsertData.arrival_time,
+        seats_total: totalSeats,
+        price_per_seat: pricePerSeat,
+        stopovers_count: stopovers?.length || 0
+      }
+    });
+
+  } catch (error) {
+    console.error('Unexpected error in rides API:', error);
+    return res.status(500).json({
+      error: 'Internal server error',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+}

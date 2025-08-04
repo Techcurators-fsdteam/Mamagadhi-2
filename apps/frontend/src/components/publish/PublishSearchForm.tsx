@@ -25,91 +25,76 @@ const PublishSearchForm: React.FC<PublishSearchFormProps> = ({ formData, onInput
   const [openVehicle, setOpenVehicle] = useState(false);
   const [openOrigin, setOpenOrigin] = useState(false);
   const [openDestination, setOpenDestination] = useState(false);
-  
-  // Search states for API results
   const [originSearchResults, setOriginSearchResults] = useState<SearchLocation[]>([]);
   const [destinationSearchResults, setDestinationSearchResults] = useState<SearchLocation[]>([]);
   const [originSearchQuery, setOriginSearchQuery] = useState('');
   const [destinationSearchQuery, setDestinationSearchQuery] = useState('');
-  
-  // Validation state
-  const [validationErrors, setValidationErrors] = useState<{[key: string]: string}>({});
+  const [validationErrors, setValidationErrors] = useState<{ [key: string]: string }>({});
 
-  // Vehicle and passenger data
-  const vehicleTypes = [
-    { value: 'bike', label: 'Bike', capacity: 1 },
-    { value: 'car', label: 'Car', capacity: 4 },
-    { value: 'big-car', label: 'Big Car', capacity: 6 },
-    { value: 'van', label: 'Van', capacity: 6 },
-    { value: 'minibus', label: 'Mini Bus', capacity: 10 },
-    { value: 'bus', label: 'Bus', capacity: 16 }
-  ];
-  const passengerCounts = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+const vehicleTypes = [
+  { value: 'bike', label: 'Bike', capacity: 1 },
+  { value: 'sedan', label: 'Sedan', capacity: 4 },
+  { value: 'suv', label: 'SUV', capacity: 6 },
+  { value: 'van', label: 'Van', capacity: 6 },
+  { value: 'minibus', label: 'Mini Bus', capacity: 10 },
+  { value: 'bus', label: 'Bus', capacity: 16 }
+];
 
-  // Search for states and cities using enhanced Mapbox API
+
+  const passengerCounts = Array.from({ length: 16 }, (_, i) => i + 1);
+
   const searchOriginLocations = async (query: string) => {
-    if (query.length < 2) {
-      setOriginSearchResults([]);
-      return;
-    }
+    if (query.length < 2) return setOriginSearchResults([]);
     try {
       const results = await searchIndianStatesAndCities(query);
       setOriginSearchResults(results);
-    } catch (error) {
-      console.error('Error searching origin:', error);
+    } catch {
       setOriginSearchResults([]);
     }
   };
 
   const searchDestinationLocations = async (query: string) => {
-    if (query.length < 2) {
-      setDestinationSearchResults([]);
-      return;
-    }
+    if (query.length < 2) return setDestinationSearchResults([]);
     try {
       const results = await searchIndianStatesAndCities(query);
       setDestinationSearchResults(results);
-    } catch (error) {
-      console.error('Error searching destination:', error);
+    } catch {
       setDestinationSearchResults([]);
     }
   };
 
   const handlePublishClick = () => {
-    const errors: {[key: string]: string} = {};
-    
-    // Validate required fields
+    const errors: { [key: string]: string } = {};
+
     if (!formData.passengers) errors.passengers = 'Please select number of passengers';
     if (!formData.vehicleType) errors.vehicleType = 'Please select vehicle type';
     if (!formData.origin) errors.origin = 'Please select origin state';
     if (!formData.destination) errors.destination = 'Please select destination state';
-    
+
     if (Object.keys(errors).length > 0) {
       setValidationErrors(errors);
-      // Clear errors after 3 seconds
       setTimeout(() => setValidationErrors({}), 3000);
       return;
     }
 
-    // Navigate to details page with only passenger and vehicle data
     const params = new URLSearchParams({
       passengers: formData.passengers,
       vehicleType: formData.vehicleType,
     });
-    
+
     router.push(`/publish/details?${params.toString()}`);
   };
 
   return (
-    <div className="rounded-xl shadow-2xl border border-gray-100 w-full max-w-sm sm:max-w-md lg:max-w-lg h-[400px] flex flex-col backdrop-blur-sm bg-white/95">
+    <div className="rounded-xl shadow-2xl border border-gray-100 w-full max-w-sm sm:max-w-md lg:max-w-lg h-auto flex flex-col backdrop-blur-sm bg-white/95">
       {/* Header */}
       <div className="p-4 pb-2">
         <h3 className="text-lg font-bold text-gray-800 text-center">Ride Details</h3>
         <p className="text-sm text-gray-600 text-center">Select your preferences</p>
       </div>
-      
+
       {/* Form Fields */}
-      <div className="flex-1 p-4 pt-2 space-y-3 overflow-y-auto">
+      <div className="flex-1 px-4 pb-2 space-y-3 overflow-y-auto">
         {/* Origin City */}
         <div className="relative">
           <Popover open={openOrigin} onOpenChange={setOpenOrigin}>
@@ -117,7 +102,7 @@ const PublishSearchForm: React.FC<PublishSearchFormProps> = ({ formData, onInput
               <div className={`flex items-center gap-3 p-3 border rounded-lg hover:border-gray-300 hover:shadow-md transition-all cursor-pointer bg-gray-50/80 hover:bg-white group ${
                 validationErrors.origin ? 'border-red-500 bg-red-50' : 'border-gray-200'
               }`}>
-                <div className="w-3 h-3 rounded-full bg-green-500 flex-shrink-0"></div>
+                <div className="w-3 h-3 rounded-full bg-green-500 flex-shrink-0" />
                 <div className="flex-1 text-left">
                   <span className="text-sm font-semibold text-gray-700">
                     {formData.origin || "From (Origin State/City)"}
@@ -142,56 +127,25 @@ const PublishSearchForm: React.FC<PublishSearchFormProps> = ({ formData, onInput
                 </div>
                 <CommandEmpty>No location found.</CommandEmpty>
                 <CommandGroup className="max-h-48 overflow-auto">
-                  {(() => {
-                    const states = originSearchResults.filter(r => r.category === 'state');
-                    const cities = originSearchResults.filter(r => r.category === 'city' || r.category === 'locality');
-                    
-                    return (
-                      <>
-                        {states.map((location) => (
-                          <CommandItem
-                            key={location.fullAddress}
-                            value={location.name}
-                            onSelect={() => {
-                              onInputChange('origin', location.name);
-                              setOpenOrigin(false);
-                              setOriginSearchQuery('');
-                              setOriginSearchResults([]);
-                              setValidationErrors(prev => ({ ...prev, origin: '' }));
-                            }}
-                            className="py-2 px-3"
-                          >
-                            <div>
-                              <div className="font-medium text-sm">{location.name}</div>
-                              <div className="text-xs text-gray-500">{location.fullAddress}</div>
-                            </div>
-                          </CommandItem>
-                        ))}
-                        {cities.length > 0 && states.length > 0 && (
-                          <div className="px-3 py-1 text-xs font-semibold text-gray-500 bg-gray-50">Cities & Localities</div>
-                        )}
-                        {cities.map((location) => (
-                          <CommandItem
-                            key={location.fullAddress}
-                            value={location.name}
-                            onSelect={() => {
-                              onInputChange('origin', location.name);
-                              setOpenOrigin(false);
-                              setOriginSearchQuery('');
-                              setOriginSearchResults([]);
-                              setValidationErrors(prev => ({ ...prev, origin: '' }));
-                            }}
-                            className="py-2 px-3"
-                          >
-                            <div>
-                              <div className="font-medium text-sm">{location.name}</div>
-                              <div className="text-xs text-gray-500">{location.fullAddress}</div>
-                            </div>
-                          </CommandItem>
-                        ))}
-                      </>
-                    );
-                  })()}
+                  {originSearchResults.map((location) => (
+                    <CommandItem
+                      key={location.fullAddress}
+                      value={location.name}
+                      onSelect={() => {
+                        onInputChange('origin', location.name);
+                        setOpenOrigin(false);
+                        setOriginSearchQuery('');
+                        setOriginSearchResults([]);
+                        setValidationErrors(prev => ({ ...prev, origin: '' }));
+                      }}
+                      className="py-2 px-3"
+                    >
+                      <div>
+                        <div className="font-medium text-sm">{location.name}</div>
+                        <div className="text-xs text-gray-500">{location.fullAddress}</div>
+                      </div>
+                    </CommandItem>
+                  ))}
                 </CommandGroup>
               </Command>
             </PopoverContent>
@@ -208,7 +162,7 @@ const PublishSearchForm: React.FC<PublishSearchFormProps> = ({ formData, onInput
               <div className={`flex items-center gap-3 p-3 border rounded-lg hover:border-gray-300 hover:shadow-md transition-all cursor-pointer bg-gray-50/80 hover:bg-white group ${
                 validationErrors.destination ? 'border-red-500 bg-red-50' : 'border-gray-200'
               }`}>
-                <div className="w-3 h-3 rounded-full bg-red-500 flex-shrink-0"></div>
+                <div className="w-3 h-3 rounded-full bg-red-500 flex-shrink-0" />
                 <div className="flex-1 text-left">
                   <span className="text-sm font-semibold text-gray-700">
                     {formData.destination || "To (Destination State/City)"}
@@ -233,56 +187,25 @@ const PublishSearchForm: React.FC<PublishSearchFormProps> = ({ formData, onInput
                 </div>
                 <CommandEmpty>No location found.</CommandEmpty>
                 <CommandGroup className="max-h-48 overflow-auto">
-                  {(() => {
-                    const states = destinationSearchResults.filter(r => r.category === 'state');
-                    const cities = destinationSearchResults.filter(r => r.category === 'city' || r.category === 'locality');
-                    
-                    return (
-                      <>
-                        {states.map((location) => (
-                          <CommandItem
-                            key={location.fullAddress}
-                            value={location.name}
-                            onSelect={() => {
-                              onInputChange('destination', location.name);
-                              setOpenDestination(false);
-                              setDestinationSearchQuery('');
-                              setDestinationSearchResults([]);
-                              setValidationErrors(prev => ({ ...prev, destination: '' }));
-                            }}
-                            className="py-2 px-3"
-                          >
-                            <div>
-                              <div className="font-medium text-sm">{location.name}</div>
-                              <div className="text-xs text-gray-500">{location.fullAddress}</div>
-                            </div>
-                          </CommandItem>
-                        ))}
-                        {cities.length > 0 && states.length > 0 && (
-                          <div className="px-3 py-1 text-xs font-semibold text-gray-500 bg-gray-50">Cities & Localities</div>
-                        )}
-                        {cities.map((location) => (
-                          <CommandItem
-                            key={location.fullAddress}
-                            value={location.name}
-                            onSelect={() => {
-                              onInputChange('destination', location.name);
-                              setOpenDestination(false);
-                              setDestinationSearchQuery('');
-                              setDestinationSearchResults([]);
-                              setValidationErrors(prev => ({ ...prev, destination: '' }));
-                            }}
-                            className="py-2 px-3"
-                          >
-                            <div>
-                              <div className="font-medium text-sm">{location.name}</div>
-                              <div className="text-xs text-gray-500">{location.fullAddress}</div>
-                            </div>
-                          </CommandItem>
-                        ))}
-                      </>
-                    );
-                  })()}
+                  {destinationSearchResults.map((location) => (
+                    <CommandItem
+                      key={location.fullAddress}
+                      value={location.name}
+                      onSelect={() => {
+                        onInputChange('destination', location.name);
+                        setOpenDestination(false);
+                        setDestinationSearchQuery('');
+                        setDestinationSearchResults([]);
+                        setValidationErrors(prev => ({ ...prev, destination: '' }));
+                      }}
+                      className="py-2 px-3"
+                    >
+                      <div>
+                        <div className="font-medium text-sm">{location.name}</div>
+                        <div className="text-xs text-gray-500">{location.fullAddress}</div>
+                      </div>
+                    </CommandItem>
+                  ))}
                 </CommandGroup>
               </Command>
             </PopoverContent>
@@ -292,7 +215,7 @@ const PublishSearchForm: React.FC<PublishSearchFormProps> = ({ formData, onInput
           )}
         </div>
 
-        {/* Passengers and Vehicle Type - Two column layout */}
+        {/* Passengers and Vehicle Type */}
         <div className="grid grid-cols-2 gap-3">
           {/* Passengers */}
           <div className="relative">
@@ -381,9 +304,9 @@ const PublishSearchForm: React.FC<PublishSearchFormProps> = ({ formData, onInput
           </div>
         </div>
       </div>
-      
-      {/* Button Container */}
-      <div className="p-4 pt-1">
+
+      {/* Button */}
+      <div className="px-4 pb-4">
         <Button 
           onClick={handlePublishClick}
           className="w-full py-3 text-sm font-bold rounded-lg bg-gradient-to-r from-[#4AAAFF] to-[#6BB6FF] hover:from-blue-600 hover:to-blue-700 text-white transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98]"

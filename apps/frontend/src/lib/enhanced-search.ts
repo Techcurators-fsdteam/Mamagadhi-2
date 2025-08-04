@@ -13,6 +13,7 @@ export interface EnhancedSearchLocation {
   relevance: number;
   category: 'address' | 'poi' | 'place' | 'locality' | 'region' | 'neighborhood' | 'state' | 'city';
   context?: string;
+  state?: string; // New field to store the state/region information
   searchLevel: 'interstate' | 'intercity' | 'local'; // New field for carpooling context
 }
 
@@ -191,6 +192,12 @@ export const searchEnhancedLocations = async (
           feature.context.map((c: any) => c.text).join(', ') : 
           '';
 
+        // Extract state information from context
+        const stateInfo = feature.context?.find((c: any) => 
+          c.id?.startsWith('region') || c.id?.startsWith('place')
+        );
+        const state = stateInfo?.text || '';
+
         return {
           name: feature.text || feature.place_name,
           fullAddress: feature.place_name,
@@ -199,6 +206,7 @@ export const searchEnhancedLocations = async (
           relevance,
           category,
           context,
+          state,
           searchLevel: carpoolingAnalysis.searchLevel
         };
       })

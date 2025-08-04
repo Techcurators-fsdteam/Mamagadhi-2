@@ -3,7 +3,7 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { CalendarIcon, Users, DollarSign, Minus, Plus } from 'lucide-react';
+import { CalendarIcon, Users, IndianRupee, Minus, Plus, Clock } from 'lucide-react';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 
@@ -15,6 +15,8 @@ interface Stopover {
 
 interface BookingDetails {
   date: Date | null;
+  departureTime: string;
+  arrivalTime: string;
   passengers: number;
   pricePerSeat: string;
 }
@@ -24,6 +26,8 @@ interface BookingDetailsFormProps {
   formData: {
     origin: string;
     destination: string;
+    originLandmark: string;
+    destinationLandmark: string;
   };
   stopovers: Stopover[];
   routeDetails: {
@@ -66,6 +70,9 @@ const BookingDetailsForm: React.FC<BookingDetailsFormProps> = ({
               <div className="flex-1">
                 <div className="text-xs text-gray-500 uppercase">From</div>
                 <div className="text-sm font-medium text-gray-800">{formData.origin || 'Origin not selected'}</div>
+                {formData.originLandmark && (
+                  <div className="text-xs text-gray-500 mt-1">📍 {formData.originLandmark}</div>
+                )}
               </div>
             </div>
             {stopovers.map((stopover) => (
@@ -82,6 +89,9 @@ const BookingDetailsForm: React.FC<BookingDetailsFormProps> = ({
               <div className="flex-1">
                 <div className="text-xs text-gray-500 uppercase">To</div>
                 <div className="text-sm font-medium text-gray-800">{formData.destination || 'Destination not selected'}</div>
+                {formData.destinationLandmark && (
+                  <div className="text-xs text-gray-500 mt-1">📍 {formData.destinationLandmark}</div>
+                )}
               </div>
             </div>
           </div>
@@ -127,6 +137,45 @@ const BookingDetailsForm: React.FC<BookingDetailsFormProps> = ({
               <CalendarIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
             </div>
           </div>
+
+          {/* Time Selection */}
+          <div className="grid grid-cols-2 gap-4">
+            {/* Departure Time */}
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">
+                Departure Time
+              </label>
+              <div className="relative">
+                <Clock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Input
+                  type="time"
+                  value={bookingDetails.departureTime}
+                  onChange={(e) => onBookingDetailsChange('departureTime', e.target.value)}
+                  className="pl-10 h-12 rounded-lg border border-gray-200 focus:border-[#4AAAFF] focus:ring-2 focus:ring-blue-100 transition-all duration-200"
+                />
+              </div>
+            </div>
+
+            {/* Arrival Time (Auto-calculated) */}
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">
+                Est. Arrival Time
+              </label>
+              <div className="relative">
+                <Clock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Input
+                  type="time"
+                  value={bookingDetails.arrivalTime}
+                  readOnly
+                  className="pl-10 h-12 rounded-lg border border-gray-200 bg-gray-50 text-gray-600 cursor-not-allowed"
+                  placeholder="Auto-calculated"
+                />
+              </div>
+              <div className="text-xs text-gray-500 text-center">
+                Based on route duration
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Pricing and Passengers */}
@@ -140,7 +189,7 @@ const BookingDetailsForm: React.FC<BookingDetailsFormProps> = ({
                 Price per Seat
               </label>
               <div className="relative">
-                <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <IndianRupee className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <Input
                   type="number"
                   value={bookingDetails.pricePerSeat}
@@ -192,7 +241,7 @@ const BookingDetailsForm: React.FC<BookingDetailsFormProps> = ({
         {/* Publish Button */}
         <Button
           onClick={onSubmit}
-          disabled={!bookingDetails.date || !bookingDetails.pricePerSeat}
+          disabled={!bookingDetails.date || !bookingDetails.departureTime || !bookingDetails.pricePerSeat}
           className="w-full h-12 bg-[#4AAAFF] hover:bg-blue-600 text-white rounded-lg font-medium transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Publish Trip
