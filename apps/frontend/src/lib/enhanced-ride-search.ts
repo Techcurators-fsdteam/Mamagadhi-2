@@ -87,7 +87,7 @@ class EnhancedRideSearchClient {
   private baseUrl: string;
   private requestId: number = 0;
 
-  constructor(baseUrl: string = 'http://localhost:3001') {
+  constructor(baseUrl: string = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001') {
     this.baseUrl = baseUrl;
   }
 
