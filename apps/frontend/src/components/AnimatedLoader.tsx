@@ -12,7 +12,7 @@ const AnimatedLoader = () => {
           <Image
             src="/logo.png"
             alt="Loading..."
-            width={120}
+            width={150}
             height={120}
             className="animate-pulse"
           />

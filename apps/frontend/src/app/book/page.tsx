@@ -1,25 +1,24 @@
 'use client';
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import Navbar from '../../components/Navbar';
 import Footer from '../../components/Footer';
 import SearchBar from '@/components/SearchBar';
-import BookingConfirmation from '@/components/booking/BookingConfirmation';
-import { CheckCircle2, Users, Star, Cigarette, PawPrint, Car, User, MapPin, Clock, Zap } from 'lucide-react';
+import {Car, User} from 'lucide-react';
 import { enhancedRideSearchClient, RideMatch, SearchResponse } from '@/lib/enhanced-ride-search';
 
 function BookRide() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [sortBy, setSortBy] = useState('relevance');
   const [departureTime, setDepartureTime] = useState<string[]>([]);
-  const [amenities, setAmenities] = useState<string[]>([]);
-  const [verifiedProfile, setVerifiedProfile] = useState(false);
+  const [vehicleTypes, setVehicleTypes] = useState<string[]>([]);
+  const [priceRanges, setPriceRanges] = useState<string[]>([]);
+  const [availableVehicleTypes, setAvailableVehicleTypes] = useState<string[]>([]);
   const [searchResults, setSearchResults] = useState<RideMatch[]>([]);
   const [searchMetadata, setSearchMetadata] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
-  const [selectedRide, setSelectedRide] = useState<any>(null);
-  const [showBookingModal, setShowBookingModal] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
 
   const handleTimeFilter = (time: string) => {
@@ -30,19 +29,27 @@ function BookRide() {
     );
   };
 
-  const handleAmenityFilter = (amenity: string) => {
-    setAmenities(prev => 
-      prev.includes(amenity) 
-        ? prev.filter(a => a !== amenity)
-        : [...prev, amenity]
+  const handleVehicleTypeFilter = (vehicleType: string) => {
+    setVehicleTypes(prev => 
+      prev.includes(vehicleType) 
+        ? prev.filter(v => v !== vehicleType)
+        : [...prev, vehicleType]
+    );
+  };
+
+  const handlePriceFilter = (priceRange: string) => {
+    setPriceRanges(prev => 
+      prev.includes(priceRange) 
+        ? prev.filter(p => p !== priceRange)
+        : [...prev, priceRange]
     );
   };
 
   const clearAllFilters = () => {
     setSortBy('relevance');
     setDepartureTime([]);
-    setAmenities([]);
-    setVerifiedProfile(false);
+    setVehicleTypes([]);
+    setPriceRanges([]);
   };
 
   const handleSearch = async (searchCriteria: any) => {
@@ -72,6 +79,10 @@ function BookRide() {
       if (result.success) {
         setSearchResults(result.results.rides);
         setSearchMetadata(result.results.metadata);
+        
+        // Extract unique vehicle types from search results
+        const uniqueVehicleTypes = [...new Set(result.results.rides.map(ride => ride.vehicle_type))];
+        setAvailableVehicleTypes(uniqueVehicleTypes);
       } else {
         throw new Error('Search was not successful');
       }
@@ -88,6 +99,8 @@ function BookRide() {
 
   // Handle URL parameters from search bar navigation
   useEffect(() => {
+    if (!searchParams) return;
+    
     const from = searchParams.get('from');
     const to = searchParams.get('to');
     const date = searchParams.get('date');
@@ -127,10 +140,34 @@ function BookRide() {
         const hour = new Date(ride.departure_time).getHours();
         return departureTime.some(timeRange => {
           switch (timeRange) {
-            case 'morning': return hour >= 6 && hour < 12;
-            case 'afternoon': return hour >= 12 && hour < 18;
-            case 'evening': return hour >= 18 && hour < 24;
-            case 'night': return hour >= 0 && hour < 6;
+            case 'early-morning': return hour >= 4 && hour < 8;   // 4 AM - 8 AM
+            case 'morning': return hour >= 8 && hour < 12;        // 8 AM - 12 PM
+            case 'afternoon': return hour >= 12 && hour < 16;     // 12 PM - 4 PM
+            case 'evening': return hour >= 16 && hour < 20;       // 4 PM - 8 PM
+            case 'night': return hour >= 20 || hour < 4;          // 8 PM - 4 AM
+            default: return true;
+          }
+        });
+      });
+    }
+
+    // Apply vehicle type filters
+    if (vehicleTypes.length > 0) {
+      filtered = filtered.filter(ride => 
+        vehicleTypes.includes(ride.vehicle_type)
+      );
+    }
+
+    // Apply price range filters
+    if (priceRanges.length > 0) {
+      filtered = filtered.filter(ride => {
+        const price = ride.price_per_seat;
+        return priceRanges.some(range => {
+          switch (range) {
+            case 'budget': return price < 500;
+            case 'mid': return price >= 500 && price <= 1000;
+            case 'premium': return price > 1000 && price <= 2000;
+            case 'luxury': return price > 2000;
             default: return true;
           }
         });
@@ -144,12 +181,19 @@ function BookRide() {
           return b.confidence_score - a.confidence_score;
         case 'earliest':
           return new Date(a.departure_time).getTime() - new Date(b.departure_time).getTime();
+        case 'latest':
+          return new Date(b.departure_time).getTime() - new Date(a.departure_time).getTime();
         case 'cheapest':
           return a.price_per_seat - b.price_per_seat;
         case 'closest':
           const aTotalDist = (a.total_distance_km || 999);
           const bTotalDist = (b.total_distance_km || 999);
           return aTotalDist - bTotalDist;
+        case 'fastest':
+          // Calculate duration in hours
+          const aDuration = (new Date(a.arrival_time).getTime() - new Date(a.departure_time).getTime()) / (1000 * 60 * 60);
+          const bDuration = (new Date(b.arrival_time).getTime() - new Date(b.departure_time).getTime()) / (1000 * 60 * 60);
+          return aDuration - bDuration;
         default:
           return 0;
       }
@@ -161,20 +205,8 @@ function BookRide() {
   const displayRides = applyFiltersAndSort(searchResults);
 
   const handleBookRide = (rideId: string) => {
-    const ride = displayRides.find(r => r.ride_id === rideId);
-    if (ride) {
-      setSelectedRide(ride);
-      setShowBookingModal(true);
-    }
-  };
-
-  const handleConfirmBooking = async (bookingData: any) => {
-    console.log('✅ Booking confirmed:', bookingData);
-    setShowBookingModal(false);
-    setSelectedRide(null);
-    
-    // TODO: Implement actual booking API call
-    alert('Ride booked successfully!');
+    // Navigate to the booking details page
+    router.push(`/book/${rideId}`);
   };
 
   const formatTime = (dateString: string) => {
@@ -223,7 +255,9 @@ function BookRide() {
                         { value: 'relevance', label: 'Best Match' },
                         { value: 'earliest', label: 'Earliest Departure' },
                         { value: 'cheapest', label: 'Lowest Price' },
-                        { value: 'closest', label: 'Closest Distance' }
+                        { value: 'closest', label: 'Closest Distance' },
+                        { value: 'fastest', label: 'Shortest Duration' },
+                        { value: 'latest', label: 'Latest Departure' }
                       ].map(option => (
                         <label key={option.value} className="flex items-center space-x-2">
                           <input 
@@ -234,7 +268,7 @@ function BookRide() {
                             onChange={(e) => setSortBy(e.target.value)}
                             className="text-blue-500"
                           />
-                          <span className="text-sm capitalize">{option.label}</span>
+                          <span className="text-sm">{option.label}</span>
                         </label>
                       ))}
                     </div>
@@ -244,56 +278,95 @@ function BookRide() {
                   <div className="mb-6">
                     <h4 className="font-medium mb-3">Departure time</h4>
                     <div className="space-y-2">
-                      {['6:00 - 12:00', '12:00 - 18:00', '18:00 - 00:00'].map(time => (
-                        <label key={time} className="flex items-center space-x-2">
+                      {[
+                        { value: 'early-morning', label: '4:00 - 8:00 AM' },
+                        { value: 'morning', label: '8:00 AM - 12:00 PM' },
+                        { value: 'afternoon', label: '12:00 - 4:00 PM' },
+                        { value: 'evening', label: '4:00 - 8:00 PM' },
+                        { value: 'night', label: '8:00 PM - 4:00 AM' }
+                      ].map(time => (
+                        <label key={time.value} className="flex items-center space-x-2">
                           <input 
                             type="checkbox" 
-                            checked={departureTime.includes(time)}
-                            onChange={() => handleTimeFilter(time)}
+                            checked={departureTime.includes(time.value)}
+                            onChange={() => handleTimeFilter(time.value)}
                             className="text-blue-500"
                           />
-                          <span className="text-sm">{time}</span>
+                          <span className="text-sm">{time.label}</span>
                         </label>
                       ))}
                     </div>
                   </div>
 
-                  {/* Amenities */}
+                  {/* Price Range Filter */}
                   <div className="mb-6">
-                    <h4 className="font-medium mb-3">Amenities</h4>
+                    <h4 className="font-medium mb-3">Price Range</h4>
                     <div className="space-y-2">
                       {[
-                        { key: 'smoking-allowed', label: 'Smoking allowed', icon: Cigarette },
-                        { key: 'max-2-back', label: 'Max 2 in the back', icon: Users },
-                        { key: 'pets-allowed', label: 'Pets allowed', icon: PawPrint }
-                      ].map(({ key, label, icon: Icon }) => (
-                        <label key={key} className="flex items-center space-x-2">
+                        { value: 'budget', label: 'Under ₹500', range: [0, 500] },
+                        { value: 'mid', label: '₹500 - ₹1000', range: [500, 1000] },
+                        { value: 'premium', label: '₹1000 - ₹2000', range: [1000, 2000] },
+                        { value: 'luxury', label: 'Above ₹2000', range: [2000, 99999] }
+                      ].map(price => (
+                        <label key={price.value} className="flex items-center space-x-2">
                           <input 
                             type="checkbox" 
-                            checked={amenities.includes(key)}
-                            onChange={() => handleAmenityFilter(key)}
+                            checked={priceRanges.includes(price.value)}
+                            onChange={() => handlePriceFilter(price.value)}
                             className="text-blue-500"
                           />
-                          <Icon className="w-4 h-4 text-gray-400" />
-                          <span className="text-sm">{label}</span>
+                          <span className="text-sm">{price.label}</span>
                         </label>
                       ))}
                     </div>
                   </div>
 
-                  {/* Profile Verification */}
-                  <div>
-                    <label className="flex items-center space-x-2">
-                      <input 
-                        type="checkbox" 
-                        checked={verifiedProfile}
-                        onChange={(e) => setVerifiedProfile(e.target.checked)}
-                        className="text-blue-500"
-                      />
-                      <CheckCircle2 className="w-4 h-4 text-blue-500" />
-                      <span className="text-sm">Verified profile</span>
-                    </label>
-                  </div>
+                  {/* Vehicle Types */}
+                  {availableVehicleTypes.length > 0 && (
+                    <div className="mb-6">
+                      <h4 className="font-medium mb-3">Vehicle Types</h4>
+                      <div className="space-y-2">
+                        {availableVehicleTypes.map((vehicleType) => (
+                          <label key={vehicleType} className="flex items-center space-x-2">
+                            <input 
+                              type="checkbox" 
+                              checked={vehicleTypes.includes(vehicleType)}
+                              onChange={() => handleVehicleTypeFilter(vehicleType)}
+                              className="text-blue-500"
+                            />
+                            <Car className="w-4 h-4 text-gray-400" />
+                            <span className="text-sm capitalize">{vehicleType}</span>
+                            <span className="text-xs text-gray-500 ml-auto">
+                              ({searchResults.filter(r => r.vehicle_type === vehicleType).length})
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Add All Vehicle Types option if no search results yet */}
+                  {availableVehicleTypes.length === 0 && hasSearched && (
+                    <div className="mb-6">
+                      <h4 className="font-medium mb-3">Vehicle Types</h4>
+                      <div className="space-y-2">
+                        {['sedan', 'suv', 'hatchback', 'mpv', 'luxury', 'bike', 'auto'].map((vehicleType) => (
+                          <label key={vehicleType} className="flex items-center space-x-2">
+                            <input 
+                              type="checkbox" 
+                              checked={vehicleTypes.includes(vehicleType)}
+                              onChange={() => handleVehicleTypeFilter(vehicleType)}
+                              className="text-blue-500"
+                              disabled
+                            />
+                            <Car className="w-4 h-4 text-gray-300" />
+                            <span className="text-sm capitalize text-gray-400">{vehicleType}</span>
+                            <span className="text-xs text-gray-400 ml-auto">(0)</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -561,15 +634,13 @@ function BookRide() {
                           </div>
                         </div>
                       </div>
-                    ); // Fixed: Added missing closing bracket for the ride mapping function
+                    );
                   })}
 
                     {/* Load More Button */}
                     {displayRides.length > 0 && (
                       <div className="text-center pt-6">
-                        <button className="bg-blue-500 text-white px-8 py-3 rounded-lg hover:bg-blue-600 transition-colors">
-                          Load more results
-                        </button>
+                      
                       </div>
                     )}
                   </div>
@@ -596,17 +667,6 @@ function BookRide() {
           </div>
         </div>
       </main>
-      
-      {/* Booking Confirmation Modal */}
-      <BookingConfirmation
-        ride={selectedRide}
-        isOpen={showBookingModal}
-        onClose={() => {
-          setShowBookingModal(false);
-          setSelectedRide(null);
-        }}
-        onConfirm={handleConfirmBooking}
-      />
       
       <Footer />
     </div>

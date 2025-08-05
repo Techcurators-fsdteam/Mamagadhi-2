@@ -55,15 +55,150 @@ interface RideMatch {
   confidence_score: number;
 }
 
-// Helper function for fuzzy text matching
+// Enhanced location matching with PostGIS and geographic intelligence
+function calculateLocationScore(searchOrigin: SearchLocation, searchDest: SearchLocation, rideOrigin: string, rideDest: string, rideOriginState: string, rideDestState: string): {
+  score: number;
+  originMatch: number;
+  destMatch: number;
+  details: string;
+} {
+  // State-level matching (highest priority)
+  const searchOriginState = extractState(searchOrigin.fullAddress);
+  const searchDestState = extractState(searchDest.fullAddress);
+  
+  let originScore = 0;
+  let destScore = 0;
+  let details = '';
+  
+  // Origin matching logic
+  if (searchOriginState && rideOriginState) {
+    if (searchOriginState.toLowerCase() === rideOriginState.toLowerCase()) {
+      originScore = 95; // Same state = high match
+      details += `Origin: Same state (${searchOriginState}). `;
+      
+      // City/area level refinement within state
+      const cityMatch = fuzzyTextMatch(searchOrigin.name, rideOrigin);
+      if (cityMatch > 80) {
+        originScore = 98; // Same city in same state
+        details += `Same city match. `;
+      }
+    } else {
+      // Different states - check if they're neighboring or commonly connected
+      const neighboringStates = getNeighboringStates(searchOriginState);
+      if (neighboringStates.includes(rideOriginState.toLowerCase())) {
+        originScore = 40; // Neighboring state
+        details += `Origin: Neighboring state. `;
+      } else {
+        originScore = 10; // Distant state
+        details += `Origin: Different state. `;
+      }
+    }
+  } else {
+    // Fallback to text matching
+    originScore = fuzzyTextMatch(searchOrigin.name, rideOrigin);
+    details += `Origin: Text match (${originScore}%). `;
+  }
+  
+  // Destination matching logic (same logic as origin)
+  if (searchDestState && rideDestState) {
+    if (searchDestState.toLowerCase() === rideDestState.toLowerCase()) {
+      destScore = 95; // Same state = high match
+      details += `Dest: Same state (${searchDestState}). `;
+      
+      const cityMatch = fuzzyTextMatch(searchDest.name, rideDest);
+      if (cityMatch > 80) {
+        destScore = 98; // Same city in same state
+        details += `Same city match. `;
+      }
+    } else {
+      const neighboringStates = getNeighboringStates(searchDestState);
+      if (neighboringStates.includes(rideDestState.toLowerCase())) {
+        destScore = 40; // Neighboring state
+        details += `Dest: Neighboring state. `;
+      } else {
+        destScore = 10; // Distant state
+        details += `Dest: Different state. `;
+      }
+    }
+  } else {
+    destScore = fuzzyTextMatch(searchDest.name, rideDest);
+    details += `Dest: Text match (${destScore}%). `;
+  }
+  
+  // Calculate overall location score with both origin and destination
+  const overallScore = (originScore + destScore) / 2;
+  
+  return {
+    score: overallScore,
+    originMatch: originScore,
+    destMatch: destScore,
+    details: details.trim()
+  };
+}
+
+// Helper function to extract state from address
+function extractState(address: string): string | null {
+  const statePatterns = [
+    'delhi', 'mumbai', 'bangalore', 'hyderabad', 'pune', 'chennai', 'kolkata',
+    'jaipur', 'rajasthan', 'gujarat', 'maharashtra', 'karnataka', 'tamil nadu',
+    'kerala', 'punjab', 'haryana', 'uttar pradesh', 'madhya pradesh',
+    'west bengal', 'odisha', 'bihar', 'jharkhand', 'assam', 'goa'
+  ];
+  
+  const addressLower = address.toLowerCase();
+  for (const state of statePatterns) {
+    if (addressLower.includes(state)) {
+      return state;
+    }
+  }
+  return null;
+}
+
+// Helper function to get neighboring states for route optimization
+function getNeighboringStates(state: string): string[] {
+  const neighbors: { [key: string]: string[] } = {
+    'delhi': ['haryana', 'uttar pradesh', 'punjab'],
+    'mumbai': ['maharashtra', 'gujarat', 'goa'],
+    'maharashtra': ['gujarat', 'madhya pradesh', 'karnataka', 'goa'],
+    'rajasthan': ['delhi', 'haryana', 'punjab', 'gujarat', 'madhya pradesh'],
+    'gujarat': ['rajasthan', 'maharashtra', 'madhya pradesh'],
+    'karnataka': ['maharashtra', 'tamil nadu', 'kerala', 'andhra pradesh'],
+    'tamil nadu': ['karnataka', 'kerala', 'andhra pradesh'],
+    'punjab': ['delhi', 'haryana', 'rajasthan', 'himachal pradesh'],
+    'haryana': ['delhi', 'punjab', 'rajasthan', 'uttar pradesh']
+  };
+  
+  return neighbors[state.toLowerCase()] || [];
+}
+
+// Helper function for fuzzy text matching with city-area relationships
 function fuzzyTextMatch(searchText: string, targetText: string): number {
   if (!searchText || !targetText) return 0;
   
   const search = searchText.toLowerCase().trim();
   const target = targetText.toLowerCase().trim();
   
+  // City-area mapping for better matching
+  const cityMappings: { [key: string]: string[] } = {
+    'delhi': ['janakpuri', 'cp', 'connaught place', 'karol bagh', 'lajpat nagar', 'rohini', 'dwarka', 'gurgaon border', 'noida border'],
+    'mumbai': ['bandra', 'andheri', 'juhu', 'colaba', 'worli', 'powai', 'thane', 'navi mumbai'],
+    'bangalore': ['koramangala', 'indiranagar', 'whitefield', 'electronic city', 'btm layout', 'jayanagar'],
+    'jaipur': ['city palace', 'amber fort', 'malviya nagar', 'vaishali nagar', 'mansarovar'],
+    'pune': ['koregaon park', 'baner', 'hinjewadi', 'kothrud', 'camp area', 'viman nagar']
+  };
+  
   // Exact match
   if (search === target) return 100;
+  
+  // Check if search is an area and target is the parent city (or vice versa)
+  for (const [city, areas] of Object.entries(cityMappings)) {
+    if ((search === city && areas.some(area => target.includes(area))) ||
+        (target === city && areas.some(area => search.includes(area))) ||
+        (areas.some(area => search.includes(area)) && target.includes(city)) ||
+        (areas.some(area => target.includes(area)) && search.includes(city))) {
+      return 95; // High match for city-area relationships
+    }
+  }
   
   // Contains match
   if (target.includes(search) || search.includes(target)) return 80;
@@ -89,22 +224,51 @@ function fuzzyTextMatch(searchText: string, targetText: string): number {
   return 0;
 }
 
-// Helper function for vehicle similarity
+// Enhanced vehicle similarity with more comprehensive matching
 function isVehicleSimilar(rideVehicle: string, preferredVehicles: string[]): boolean {
   const similarities: { [key: string]: string[] } = {
-    'car': ['sedan', 'hatchback', 'suv'],
-    'sedan': ['car', 'hatchback'],
-    'hatchback': ['car', 'sedan'],
-    'suv': ['car'],
-    'auto': ['rickshaw'],
-    'rickshaw': ['auto'],
-    'bike': ['motorcycle'],
-    'motorcycle': ['bike']
+    // Cars category
+    'car': ['sedan', 'hatchback', 'suv', 'crossover', 'wagon'],
+    'sedan': ['car', 'hatchback', 'compact', 'luxury'],
+    'hatchback': ['car', 'sedan', 'compact'],
+    'suv': ['car', 'crossover', 'jeep', 'mpv'],
+    'crossover': ['suv', 'car'],
+    'mpv': ['suv', 'van', 'minivan'],
+    'luxury': ['sedan', 'car', 'premium'],
+    
+    // Two wheelers
+    'bike': ['motorcycle', 'scooter', 'two-wheeler'],
+    'motorcycle': ['bike', 'scooter', 'two-wheeler'],
+    'scooter': ['bike', 'motorcycle', 'two-wheeler'],
+    
+    // Three wheelers
+    'auto': ['rickshaw', 'three-wheeler', 'tuk-tuk'],
+    'rickshaw': ['auto', 'three-wheeler', 'tuk-tuk'],
+    'three-wheeler': ['auto', 'rickshaw'],
+    
+    // Commercial vehicles
+    'van': ['mini-van', 'mpv', 'commercial'],
+    'truck': ['mini-truck', 'commercial', 'goods-vehicle'],
+    'bus': ['mini-bus', 'coach', 'public-transport'],
+    
+    // Premium category
+    'premium': ['luxury', 'executive', 'business'],
+    'executive': ['premium', 'luxury', 'business']
   };
   
+  const rideVehicleLower = rideVehicle.toLowerCase();
+  
   for (const preferred of preferredVehicles) {
-    if (similarities[rideVehicle.toLowerCase()]?.includes(preferred.toLowerCase()) ||
-        similarities[preferred.toLowerCase()]?.includes(rideVehicle.toLowerCase())) {
+    const preferredLower = preferred.toLowerCase();
+    
+    // Exact match
+    if (rideVehicleLower === preferredLower) {
+      return true;
+    }
+    
+    // Similar vehicle types
+    if (similarities[rideVehicleLower]?.includes(preferredLower) ||
+        similarities[preferredLower]?.includes(rideVehicleLower)) {
       return true;
     }
   }
@@ -167,28 +331,37 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (allRides && allRides.length > 0) {
       searchStrategy = 'priority_scoring';
       
-      // Apply priority-based scoring: Location (60%) + Date (30%) + Vehicle (10%)
+      // Apply enhanced scoring: Location (70%) + Date (20%) + Vehicle (10%)
       matchedRides = allRides
         .map(ride => {
           let locationScore = 0;
           let dateScore = 0;
           let vehicleScore = 0;
+          let matchDetails = '';
           
-          // Location scoring (60% weight) - Priority 1
-          const originMatch = fuzzyTextMatch(origin.name, ride.origin);
-          const destMatch = fuzzyTextMatch(destination.name, ride.destination);
-          locationScore = (originMatch + destMatch) / 2;
+          // Enhanced Location scoring (70% weight) - Priority 1
+          const locationResult = calculateLocationScore(
+            origin, 
+            destination, 
+            ride.origin, 
+            ride.destination, 
+            ride.origin_state, 
+            ride.destination_state
+          );
+          locationScore = locationResult.score;
+          matchDetails = locationResult.details;
           
-          // Date scoring (30% weight) - Priority 2
+          // Date scoring (20% weight) - Priority 2
           if (travelDate) {
             const rideDate = new Date(ride.departure_time);
             const searchDate = new Date(travelDate);
             const daysDiff = Math.abs((rideDate.getTime() - searchDate.getTime()) / (1000 * 60 * 60 * 24));
             
             if (daysDiff === 0) dateScore = 100;      // Exact date
-            else if (daysDiff <= 1) dateScore = 80;   // ±1 day
-            else if (daysDiff <= 2) dateScore = 60;   // ±2 days
-            else if (daysDiff <= 3) dateScore = 40;   // ±3 days
+            else if (daysDiff <= 1) dateScore = 85;   // ±1 day
+            else if (daysDiff <= 2) dateScore = 70;   // ±2 days
+            else if (daysDiff <= 3) dateScore = 50;   // ±3 days
+            else if (daysDiff <= 7) dateScore = 25;   // ±1 week
             else dateScore = 0;                       // Outside range
           } else {
             dateScore = 100; // No date preference
@@ -199,11 +372,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             vehicleScore = 100; // No preference
           } else {
             vehicleScore = vehiclePreferences.includes(ride.vehicle_type) ? 100 : 
-                          isVehicleSimilar(ride.vehicle_type, vehiclePreferences) ? 70 : 30;
+                          isVehicleSimilar(ride.vehicle_type, vehiclePreferences) ? 75 : 40;
           }
           
-          // Calculate overall score with priority weights
-          const overallScore = (locationScore * 0.6) + (dateScore * 0.3) + (vehicleScore * 0.1);
+          // Calculate overall score with enhanced weights
+          const overallScore = (locationScore * 0.7) + (dateScore * 0.2) + (vehicleScore * 0.1);
+          
+          // Determine match type based on location score primarily
+          let matchType: 'direct' | 'intermediate' | 'fuzzy' = 'fuzzy';
+          if (locationScore >= 90) matchType = 'direct';
+          else if (locationScore >= 70) matchType = 'intermediate';
           
           return {
             ...ride,
@@ -211,32 +389,38 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             dest_distance_km: null,
             total_distance_km: null,
             route_match_score: locationScore,
-            is_intermediate_match: false,
-            match_type: overallScore > 70 ? 'direct' : 
-                       overallScore > 40 ? 'intermediate' : 'fuzzy',
-            confidence_score: overallScore
+            is_intermediate_match: matchType === 'intermediate',
+            match_type: matchType,
+            confidence_score: Math.round(overallScore),
+            match_details: matchDetails,
+            location_breakdown: {
+              origin_match: locationResult.originMatch,
+              dest_match: locationResult.destMatch
+            }
           } as RideMatch;
         })
-        .filter(ride => ride.confidence_score > 20) // Only show reasonable matches
+        .filter(ride => ride.confidence_score > 15) // Lower threshold to catch more potential matches
         .sort((a, b) => {
-          // Priority 1: Location score (most important)
+          // Priority 1: Location score (most important - 70% weight)
           const locationDiff = (b.route_match_score || 0) - (a.route_match_score || 0);
-          if (Math.abs(locationDiff) > 10) {
+          if (Math.abs(locationDiff) > 15) {
             return locationDiff;
           }
           
-          // Priority 2: Date relevance (if dates are close, prefer exact date matches)
+          // Priority 2: Overall confidence score
+          const confidenceDiff = b.confidence_score - a.confidence_score;
+          if (Math.abs(confidenceDiff) > 5) {
+            return confidenceDiff;
+          }
+          
+          // Priority 3: Date relevance (if scores are close)
           if (travelDate) {
             const aDateDiff = Math.abs(new Date(a.departure_time).getTime() - new Date(travelDate).getTime());
             const bDateDiff = Math.abs(new Date(b.departure_time).getTime() - new Date(travelDate).getTime());
-            const dateDiff = aDateDiff - bDateDiff;
-            if (Math.abs(dateDiff) > 86400000) { // More than 1 day difference
-              return dateDiff;
-            }
+            return aDateDiff - bDateDiff;
           }
           
-          // Priority 3: Overall confidence score
-          return b.confidence_score - a.confidence_score;
+          return 0;
         })
         .slice(0, 50); // Limit results
 

@@ -20,7 +20,20 @@ const ProfileContext = createContext<ProfileContextType>({
   setProfileUrl: () => {},
 });
 
-export const useProfile = () => useContext(ProfileContext);
+export const useProfile = () => {
+  try {
+    return useContext(ProfileContext);
+  } catch (error) {
+    // During build time or when context is not available, return default values
+    return {
+      userProfile: null,
+      updateProfile: () => {},
+      refreshProfile: async () => {},
+      profileUrl: null,
+      setProfileUrl: () => {},
+    };
+  }
+};
 
 export const ProfileProvider = ({ children, user }: { children: ReactNode; user: User | null }) => {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);

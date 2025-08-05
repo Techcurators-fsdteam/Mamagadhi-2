@@ -24,8 +24,8 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin, authError }) => {
             <Image
               src="/logo.png"
               alt="Mamagadhi Logo"
-              width={48}
-              height={48}
+              width={100}
+              height={70}
               className="h-12 w-auto"
             />
           </div>

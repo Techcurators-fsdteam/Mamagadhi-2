@@ -25,7 +25,21 @@ const AuthContext = createContext<AuthContextType>({
   refreshUserProfile: async () => {}
 });
 
-export const useAuth = () => useContext(AuthContext);
+export const useAuth = () => {
+  try {
+    return useContext(AuthContext);
+  } catch (error) {
+    // During build time or when context is not available, return default values
+    return {
+      user: null,
+      userProfile: null,
+      loading: false,
+      signOut: async () => {},
+      updateUserProfile: () => {},
+      refreshUserProfile: async () => {}
+    };
+  }
+};
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -33,8 +47,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!auth) {
-      // Firebase not available (during build or missing config)
+    // Handle build time or missing Firebase config gracefully
+    if (typeof window === 'undefined' || !auth) {
       setLoading(false);
       return;
     }

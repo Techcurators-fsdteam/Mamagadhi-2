@@ -45,9 +45,9 @@ const PublishDetailsPage: React.FC = () => {
   const searchParams = useSearchParams();
   const { user, userProfile, loading: authLoading } = useAuth();
   
-  // Check if user came from publish page
-  const passengersParam = searchParams.get('passengers');
-  const vehicleTypeParam = searchParams.get('vehicleType');
+  // Check if user came from publish page - handle null searchParams
+  const passengersParam = searchParams?.get('passengers');
+  const vehicleTypeParam = searchParams?.get('vehicleType');
   
   // Step management
   const [currentStep, setCurrentStep] = useState<'route' | 'booking'>('route');
