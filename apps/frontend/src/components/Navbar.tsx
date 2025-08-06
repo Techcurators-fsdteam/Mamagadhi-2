@@ -3,46 +3,48 @@ import Image from 'next/image';
 import { Button } from './ui/button';
 import { Avatar, AvatarImage, AvatarFallback } from './ui/avatar';
 import Link from 'next/link';
-import LoginPopup from './LoginPopup';
-import SignupPopup from './SignupPopup';
 import { useAuth } from '../lib/auth';
 import { useRouter } from 'next/navigation';
 import LoginRequiredPopup from './LoginRequiredPopup';
+import LoginPopup from './LoginPopup';
+import SignupPopup from './SignupPopup';
 import { supabase } from '../lib/supabase';
+import toast from 'react-hot-toast';
 
 const Navbar = () => {
   const { user, userProfile, loading, signOut } = useAuth();
-  const [showLogin, setShowLogin] = useState(false);
-  const [showSignup, setShowSignup] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const router = useRouter();
   const [showDriverPopup, setShowDriverPopup] = useState(false);
   const [showLoginRequired, setShowLoginRequired] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
+  const [showSignup, setShowSignup] = useState(false);
 
   const handleSignOut = async () => {
     await signOut();
     setShowDropdown(false);
   };
 
-  // Handler for Book a ride
+  // Handler for Book a ride - remove login check, AuthGuard handles it
   const handleBookRide = (e: React.MouseEvent) => {
     e.preventDefault();
     if (!user) {
-      setShowLoginRequired(true);
+      setShowLogin(true);
       return;
     }
     router.push('/book');
   };
 
-  // Handler for Post a ride
+  // Handler for Post a ride - remove login check, AuthGuard handles it
   const handlePostRide = async (e: React.MouseEvent) => {
     e.preventDefault();
+    
     if (!user) {
-      setShowLoginRequired(true);
+      setShowLogin(true);
       return;
     }
     
-    // Check verification status from database instead of localStorage
+    // Check verification status for authenticated users
     try {
       if (!supabase) {
         throw new Error('Database not available');
@@ -61,13 +63,11 @@ const Navbar = () => {
           return;
         }
       } else {
-        // No driver profile exists, show driver popup
         setShowDriverPopup(true);
         return;
       }
     } catch (error) {
       console.error('Error checking verification status:', error);
-      // On error, still allow navigation but let publish page handle verification
     }
     
     router.push('/publish');
@@ -134,10 +134,10 @@ const Navbar = () => {
               <div className="w-9 sm:w-10 h-9 sm:h-10 rounded-full bg-gray-200 animate-pulse"></div>
             ) : !user ? (
               <button
-                className="bg-[#2196f3] text-white font-medium text-sm px-4 py-2 rounded-full hover:bg-[#1769aa] transition h-9 sm:h-10"
                 onClick={() => setShowLogin(true)}
+                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
               >
-                Sign in
+                Sign In
               </button>
             ) : (
               <div className="flex items-center gap-2 h-full">
@@ -217,21 +217,31 @@ const Navbar = () => {
       )}
 
       {/* Popups */}
-      <LoginPopup
-        isOpen={showLogin}
-        onClose={() => setShowLogin(false)}
-        onSwitchToSignup={() => { setShowLogin(false); setShowSignup(true); }}
-      />
       {/* Login Required Popup for protected actions */}
       <LoginRequiredPopup
         isOpen={showLoginRequired}
         onClose={() => setShowLoginRequired(false)}
         setShowLogin={setShowLogin}
       />
+
+      {/* Login Popup */}
+      <LoginPopup
+        isOpen={showLogin}
+        onClose={() => setShowLogin(false)}
+        onSwitchToSignup={() => {
+          setShowLogin(false);
+          setShowSignup(true);
+        }}
+      />
+
+      {/* Signup Popup */}
       <SignupPopup
         isOpen={showSignup}
         onClose={() => setShowSignup(false)}
-        onSwitchToLogin={() => { setShowSignup(false); setShowLogin(true); }}
+        onSwitchToLogin={() => {
+          setShowSignup(false);
+          setShowLogin(true);
+        }}
       />
 
       {/* Driver Verification Popup */}

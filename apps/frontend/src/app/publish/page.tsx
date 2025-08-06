@@ -27,12 +27,6 @@ function PublishRide() {
   });
 
   useEffect(() => {
-    if (!loading && !user) {
-      router.replace('/');
-    }
-  }, [user, loading, router]);
-
-  useEffect(() => {
     const checkVerificationStatus = async () => {
       if (user?.uid && supabase) {
         try {
@@ -65,7 +59,7 @@ function PublishRide() {
     }
   }, [user, loading, router]);
 
-  if (loading || verificationLoading || !user) {
+  if (verificationLoading) {
     return <AnimatedLoader />;
   }
 

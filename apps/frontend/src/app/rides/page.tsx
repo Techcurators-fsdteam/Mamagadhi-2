@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import DeleteConfirmationDialog from '@/components/DeleteConfirmationDialog';
+import { supabase } from '@/lib/supabase';
 import { 
   Car,
   Clock, 
@@ -16,7 +17,13 @@ import {
   Edit,
   Trash2,
   Eye,
-  Plus
+  Plus,
+  MessageSquare,
+  X,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+  Phone
 } from 'lucide-react';
 
 interface Ride {
@@ -33,6 +40,7 @@ interface Ride {
   price_per_seat: number;
   status: 'open' | 'closed' | 'completed' | 'cancelled';
   created_at: string;
+  driver_id: string; // Add this missing property
   stops: Array<{
     ride_id: string;
     sequence: number;
@@ -41,66 +49,380 @@ interface Ride {
   }>;
 }
 
+interface RideBooking {
+  booking_id: string;
+  ride_id: string;
+  passenger_id: string;
+  seats_booked: number;
+  booking_status: 'pending' | 'approved' | 'denied' | 'cancelled';
+  created_at: string;
+  updated_at: string;
+  request_message: string;
+  responded_at?: string;
+  ride: {
+    origin: string;
+    destination: string;
+    origin_state?: string;
+    destination_state?: string;
+    departure_time: string;
+    arrival_time: string;
+    vehicle_type: string;
+    price_per_seat: number;
+    driver_id: string;
+    driver: {
+      display_name: string;
+      profile_url: string | null;
+      email: string | null;
+      phone: string | null;
+      first_name: string | null;
+      last_name: string | null;
+    };
+  };
+}
+
+interface RideBookingRequest {
+  booking_id: string;
+  ride_id: string;
+  passenger_id: string;
+  seats_booked: number;
+  booking_status: 'pending' | 'approved' | 'denied' | 'cancelled';
+  created_at: string;
+  updated_at: string;
+  request_message: string;
+  responded_at?: string;
+  passenger: {
+    display_name: string;
+    profile_url: string | null;
+    email?: string;
+    phone?: string;
+    first_name?: string;
+    last_name?: string;
+  };
+  ride: {
+    origin: string;
+    destination: string;
+    departure_time: string;
+    vehicle_type: string;
+    price_per_seat: number;
+  };
+}
+
 const MyRidesPage: React.FC = () => {
   const { user, userProfile, loading: authLoading } = useAuth();
   const router = useRouter();
+  const [activeTab, setActiveTab] = useState<'published' | 'bookings' | 'requests'>('published');
   const [rides, setRides] = useState<Ride[]>([]);
+  const [bookings, setBookings] = useState<RideBooking[]>([]);
+  const [bookingRequests, setBookingRequests] = useState<RideBookingRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deleteDialog, setDeleteDialog] = useState<{
     isOpen: boolean;
-    ride: Ride | null;
+    item: Ride | RideBooking | null;
+    type: 'ride' | 'booking';
     isLoading: boolean;
   }>({
     isOpen: false,
-    ride: null,
+    item: null,
+    type: 'ride',
     isLoading: false
   });
-
-  // Check if user is authenticated
+  const [processingRequest, setProcessingRequest] = useState<string | null>(null);
+  
+  // Fetch user's data
   useEffect(() => {
-    if (!authLoading && !user) {
-      toast.error('Please login to view your rides');
-      router.replace('/');
-    }
-  }, [authLoading, user, router]);
-
-  // Fetch user's rides
-  useEffect(() => {
-    const fetchRides = async () => {
-      if (!user?.uid) return;
-
-      try {
-        setLoading(true);
-        setError(null);
-
-        const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-        const response = await fetch(`${backendUrl}/api/rides/driver?driverId=${user.uid}`);
-        
-        if (!response.ok) {
-          throw new Error('Failed to fetch rides');
-        }
-
-        const result = await response.json();
-        
-        if (result.success) {
-          setRides(result.rides || []);
-        } else {
-          throw new Error(result.error || 'Unknown error');
-        }
-      } catch (err) {
-        console.error('Error fetching rides:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load rides');
-        toast.error('Failed to load your rides');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     if (user?.uid) {
-      fetchRides();
+      fetchData();
     }
   }, [user?.uid]);
+
+  const fetchData = async () => {
+    if (!user?.uid || !supabase) return;
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Fetch published rides first
+      const { data: ridesData, error: ridesError } = await supabase
+        .from('rides')
+        .select(`
+          *,
+          ride_stops (
+            ride_id,
+            sequence,
+            landmark,
+            stop_geog
+          )
+        `)
+        .eq('driver_id', user.uid)
+        .order('created_at', { ascending: false });
+
+      if (ridesError) {
+        console.error('Rides query error:', ridesError);
+        throw new Error(`Failed to fetch rides: ${ridesError.message}`);
+      }
+
+      // Process rides data to match interface
+      const processedRides = ridesData?.map(ride => ({
+        ...ride,
+        stops: ride.ride_stops || []
+      })) || [];
+
+      setRides(processedRides);
+
+      // Fetch ride bookings with a simpler query structure
+      const { data: bookingsRaw, error: bookingsError } = await supabase
+        .from('ride_bookings')
+        .select('*')
+        .eq('passenger_id', user.uid)
+        .order('created_at', { ascending: false });
+
+      if (bookingsError) {
+        console.error('Bookings query error:', bookingsError);
+        throw new Error(`Failed to fetch bookings: ${bookingsError.message}`);
+      }
+
+      // If we have bookings, fetch the related ride data separately
+      const processedBookings = [];
+      
+      if (bookingsRaw && bookingsRaw.length > 0) {
+        for (const booking of bookingsRaw) {
+          try {
+            // Fetch ride data for each booking
+            const { data: rideData, error: rideError } = await supabase
+              .from('rides')
+              .select('*')
+              .eq('ride_id', booking.ride_id)
+              .single();
+
+            if (rideError) {
+              console.warn(`Failed to fetch ride data for booking ${booking.booking_id}:`, rideError);
+              continue;
+            }
+
+            // Fetch complete driver data including contact info for approved bookings
+            let driverData = { 
+              display_name: 'Unknown Driver', 
+              profile_url: null as string | null, 
+              email: null as string | null, 
+              phone: null as string | null,
+              first_name: null as string | null,
+              last_name: null as string | null
+            };
+            
+            if (rideData.driver_id) {
+              // For approved bookings, fetch complete contact information
+              if (booking.booking_status === 'approved') {
+                const { data: driver, error: driverError } = await supabase
+                  .from('user_profiles')
+                  .select('display_name, profile_url, email, phone, first_name, last_name')
+                  .eq('id', rideData.driver_id)
+                  .single();
+
+                if (!driverError && driver) {
+                  driverData = {
+                    display_name: driver.display_name || 'Unknown Driver',
+                    profile_url: driver.profile_url || null,
+                    email: driver.email || null,
+                    phone: driver.phone || null,
+                    first_name: driver.first_name || null,
+                    last_name: driver.last_name || null
+                  };
+                }
+              } else {
+                // For non-approved bookings, only fetch basic info
+                const { data: driver, error: driverError } = await supabase
+                  .from('user_profiles')
+                  .select('display_name, profile_url')
+                  .eq('id', rideData.driver_id)
+                  .single();
+
+                if (!driverError && driver) {
+                  driverData = {
+                    display_name: driver.display_name || 'Unknown Driver',
+                    profile_url: driver.profile_url || null,
+                    email: null,
+                    phone: null,
+                    first_name: null,
+                    last_name: null
+                  };
+                }
+              }
+            }
+
+            // Combine booking with ride and driver data
+            processedBookings.push({
+              ...booking,
+              ride: {
+                ...rideData,
+                driver: driverData
+              }
+            });
+          } catch (err) {
+            console.warn(`Error processing booking ${booking.booking_id}:`, err);
+            // Continue with next booking instead of failing entirely
+          }
+        }
+      }
+
+      setBookings(processedBookings);
+
+      // Fetch booking requests for driver's rides
+      await fetchBookingRequests();
+
+    } catch (err) {
+      console.error('Error fetching data:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load data');
+      toast.error('Failed to load your rides and bookings');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchBookingRequests = async () => {
+    if (!user?.uid || !supabase) return;
+
+    try {
+      // First get all ride IDs for this driver
+      const { data: driverRides, error: ridesError } = await supabase
+        .from('rides')
+        .select('ride_id')
+        .eq('driver_id', user.uid);
+
+      if (ridesError) {
+        throw new Error(`Failed to fetch driver rides: ${ridesError.message}`);
+      }
+
+      if (!driverRides || driverRides.length === 0) {
+        setBookingRequests([]);
+        return;
+      }
+
+      const rideIds = driverRides.map(r => r.ride_id);
+
+      // Fetch booking requests for these rides
+      const { data: requestsRaw, error: requestsError } = await supabase
+        .from('ride_bookings')
+        .select('*')
+        .in('ride_id', rideIds)
+        .order('created_at', { ascending: false });
+
+      if (requestsError) {
+        throw new Error(`Failed to fetch booking requests: ${requestsError.message}`);
+      }
+
+      // Process each request to get passenger and ride details
+      const processedRequests = [];
+      
+      if (requestsRaw && requestsRaw.length > 0) {
+        for (const request of requestsRaw) {
+          try {
+            // Fetch passenger details
+            const { data: passenger, error: passengerError } = await supabase
+              .from('user_profiles')
+              .select('display_name, profile_url, email, phone, first_name, last_name')
+              .eq('id', request.passenger_id)
+              .single();
+
+            // Fetch ride details
+            const { data: ride, error: rideError } = await supabase
+              .from('rides')
+              .select('origin, destination, departure_time, vehicle_type, price_per_seat')
+              .eq('ride_id', request.ride_id)
+              .single();
+
+            if (!passengerError && passenger && !rideError && ride) {
+              processedRequests.push({
+                ...request,
+                passenger: {
+                  display_name: passenger.display_name || 'Unknown User',
+                  profile_url: passenger.profile_url || null,
+                  email: passenger.email || null,
+                  phone: passenger.phone || null,
+                  first_name: passenger.first_name || null,
+                  last_name: passenger.last_name || null,
+                },
+                ride: {
+                  origin: ride.origin,
+                  destination: ride.destination,
+                  departure_time: ride.departure_time,
+                  vehicle_type: ride.vehicle_type,
+                  price_per_seat: ride.price_per_seat,
+                }
+              });
+            }
+          } catch (err) {
+            console.warn(`Error processing request ${request.booking_id}:`, err);
+          }
+        }
+      }
+
+      setBookingRequests(processedRequests);
+    } catch (err) {
+      console.error('Error fetching booking requests:', err);
+      toast.error('Failed to load booking requests');
+    }
+  };
+
+  const handleBookingResponse = async (bookingId: string, action: 'approved' | 'denied') => {
+    if (!user?.uid || !supabase) return;
+
+    setProcessingRequest(bookingId);
+
+    try {
+      const { error } = await supabase
+        .from('ride_bookings')
+        .update({
+          booking_status: action,
+          responded_at: new Date().toISOString()
+        })
+        .eq('booking_id', bookingId);
+
+      if (error) {
+        throw new Error(`Failed to ${action === 'approved' ? 'approve' : 'deny'} booking: ${error.message}`);
+      }
+
+      // Update local state
+      setBookingRequests(prev => 
+        prev.map(request => 
+          request.booking_id === bookingId 
+            ? { ...request, booking_status: action, responded_at: new Date().toISOString() }
+            : request
+        )
+      );
+
+      // Refresh rides data to update seat availability
+      const { data: ridesData, error: ridesError } = await supabase
+        .from('rides')
+        .select(`
+          *,
+          ride_stops (
+            ride_id,
+            sequence,
+            landmark,
+            stop_geog
+          )
+        `)
+        .eq('driver_id', user.uid)
+        .order('created_at', { ascending: false });
+
+      if (!ridesError && ridesData) {
+        const processedRides = ridesData?.map(ride => ({
+          ...ride,
+          stops: ride.ride_stops || []
+        })) || [];
+        setRides(processedRides);
+      }
+
+      toast.success(`Booking ${action === 'approved' ? 'approved' : 'denied'} successfully`);
+    } catch (err) {
+      console.error(`Error ${action === 'approved' ? 'approving' : 'denying'} booking:`, err);
+      toast.error(err instanceof Error ? err.message : `Failed to ${action === 'approved' ? 'approve' : 'deny'} booking`);
+    } finally {
+      setProcessingRequest(null);
+    }
+  };
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -122,110 +444,109 @@ const MyRidesPage: React.FC = () => {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'open':
+      case 'approved':
         return 'bg-green-100 text-green-800';
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800';
       case 'closed':
         return 'bg-blue-100 text-blue-800';
       case 'completed':
         return 'bg-gray-100 text-gray-800';
       case 'cancelled':
+      case 'denied':
         return 'bg-red-100 text-red-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
   };
 
-  const getVehicleIcon = (vehicleType: string) => {
-    return <Car className="w-4 h-4" />;
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'approved':
+        return <CheckCircle className="w-4 h-4 text-green-600" />;
+      case 'pending':
+        return <AlertCircle className="w-4 h-4 text-yellow-600" />;
+      case 'denied':
+      case 'cancelled':
+        return <XCircle className="w-4 h-4 text-red-600" />;
+      default:
+        return null;
+    }
   };
 
-  // Handle delete ride
-  const handleDeleteRide = (ride: Ride) => {
+  // Returns an icon based on vehicle type
+  const getVehicleIcon = (vehicleType: string) => {
+    switch (vehicleType.toLowerCase()) {
+      case 'car':
+        return <Car className="w-5 h-5 text-blue-600" />;
+      case 'bike':
+        return <Users className="w-5 h-5 text-green-600" />;
+      case 'van':
+        return <Users className="w-5 h-5 text-purple-600" />;
+      default:
+        return <Car className="w-5 h-5 text-gray-400" />;
+    }
+  };
+
+  // Handle delete/cancel actions
+  const handleDeleteItem = (item: Ride | RideBooking, type: 'ride' | 'booking') => {
     setDeleteDialog({
       isOpen: true,
-      ride: ride,
+      item: item,
+      type: type,
       isLoading: false
     });
   };
 
-  const confirmDeleteRide = async () => {
-    const { ride } = deleteDialog;
-    if (!ride || !user?.uid) return;
+  const confirmDeleteItem = async () => {
+    const { item, type } = deleteDialog;
+    if (!item || !user?.uid || !supabase) return;
 
     try {
       setDeleteDialog(prev => ({ ...prev, isLoading: true }));
 
-      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-      const response = await fetch(`${backendUrl}/api/rides/delete?rideId=${ride.ride_id}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          driverId: user.uid
-        })
-      });
+      if (type === 'ride') {
+        const ride = item as Ride;
+        const { error } = await supabase
+          .from('rides')
+          .delete()
+          .eq('ride_id', ride.ride_id)
+          .eq('driver_id', user.uid);
 
-      const result = await response.json();
+        if (error) throw error;
 
-      if (response.ok && result.success) {
-        // Remove the ride from the list
         setRides(prevRides => prevRides.filter(r => r.ride_id !== ride.ride_id));
-        
-        // Close the dialog
-        setDeleteDialog({ isOpen: false, ride: null, isLoading: false });
-        
-        // Show success message
-        toast.success((t) => (
-          <div className="flex items-center gap-3 min-w-[280px]">
-            <div className="flex-shrink-0 w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
-              <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
-            </div>
-            <div className="flex-1">
-              <div className="font-semibold text-gray-900">Ride Deleted Successfully</div>
-              <div className="text-sm text-gray-600">Your ride has been permanently removed</div>
-            </div>
-            <button
-              onClick={() => toast.dismiss(t.id)}
-              className="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-        ), {
-          duration: 4000,
-          position: 'top-center',
-          style: {
-            background: 'white',
-            color: '#374151',
-            border: '1px solid #E5E7EB',
-            borderRadius: '12px',
-            padding: '16px',
-            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
-          },
-        });
+        toast.success('Ride deleted successfully');
       } else {
-        throw new Error(result.error || 'Failed to delete ride');
+        const booking = item as RideBooking;
+        const { error } = await supabase
+          .from('ride_bookings')
+          .delete()
+          .eq('booking_id', booking.booking_id)
+          .eq('passenger_id', user.uid);
+
+        if (error) throw error;
+
+        setBookings(prevBookings => prevBookings.filter(b => b.booking_id !== booking.booking_id));
+        toast.success('Booking request cancelled successfully');
       }
+
+      setDeleteDialog({ isOpen: false, item: null, type: 'ride', isLoading: false });
+
     } catch (err) {
-      console.error('Error deleting ride:', err);
-      toast.error(err instanceof Error ? err.message : 'Failed to delete ride', {
-        duration: 4000,
-        position: 'top-center',
-      });
+      console.error('Error deleting item:', err);
+      toast.error(err instanceof Error ? err.message : 'Failed to delete item');
     } finally {
       setDeleteDialog(prev => ({ ...prev, isLoading: false }));
     }
   };
 
-  const cancelDeleteRide = () => {
-    setDeleteDialog({ isOpen: false, ride: null, isLoading: false });
+  const cancelDeleteItem = () => {
+    setDeleteDialog({ isOpen: false, item: null, type: 'ride', isLoading: false });
   };
 
-  if (authLoading || loading) {
+  // Remove authentication loading check - handled by AuthGuard
+  if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col">
         <Navbar />
@@ -240,10 +561,6 @@ const MyRidesPage: React.FC = () => {
     );
   }
 
-  if (!user) {
-    return null; // Will redirect to login
-  }
-
   return (
     <div className="min-h-screen bg-white flex flex-col">
       <Navbar />
@@ -255,7 +572,7 @@ const MyRidesPage: React.FC = () => {
             <div>
               <h1 className="text-3xl font-bold text-gray-900">My Rides</h1>
               <p className="text-gray-600 mt-2">
-                Manage and track all your published rides
+                Manage your published rides and booking requests
               </p>
             </div>
             <button
@@ -267,76 +584,41 @@ const MyRidesPage: React.FC = () => {
             </button>
           </div>
 
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-            <div className="bg-white p-4 rounded-lg shadow-sm border">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <Car className="w-5 h-5 text-blue-600" />
-                </div>
-                <div>
-                  <div className="text-2xl font-bold text-gray-900">{rides.length}</div>
-                  <div className="text-sm text-gray-500">Total Rides</div>
-                </div>
-              </div>
-            </div>
-            
-            <div className="bg-white p-4 rounded-lg shadow-sm border">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                  <Users className="w-5 h-5 text-green-600" />
-                </div>
-                <div>
-                  <div className="text-2xl font-bold text-gray-900">
-                    {rides.filter(r => r.status === 'open').length}
-                  </div>
-                  <div className="text-sm text-gray-500">Active Rides</div>
-                </div>
-              </div>
-            </div>
-            
-            <div className="bg-white p-4 rounded-lg shadow-sm border">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                  <Calendar className="w-5 h-5 text-purple-600" />
-                </div>
-                <div>
-                  <div className="text-2xl font-bold text-gray-900">
-                    {rides.filter(r => r.status === 'completed').length}
-                  </div>
-                  <div className="text-sm text-gray-500">Completed</div>
-                </div>
-              </div>
-            </div>
-            
-            <div className="bg-white p-4 rounded-lg shadow-sm border">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-                  <IndianRupee className="w-5 h-5 text-orange-600" />
-                </div>
-                <div>
-                  <div className="text-2xl font-bold text-gray-900">
-                    ₹{rides.reduce((total, ride) => total + (ride.price_per_seat * (ride.seats_total - ride.seats_available)), 0).toLocaleString()}
-                  </div>
-                  <div className="text-sm text-gray-500">Total Earnings</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Info Note */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-8">
-            <div className="flex items-start gap-3">
-              <div className="w-5 h-5 text-blue-600 mt-0.5">
-                ℹ️
-              </div>
-              <div>
-                <h4 className="font-medium text-blue-900 mb-1">Ride Management</h4>
-                <p className="text-sm text-blue-700">
-                  You can only delete rides that are still <span className="font-medium">open</span>. 
-                  Completed, closed, or cancelled rides cannot be deleted for record-keeping purposes.
-                </p>
-              </div>
+          {/* Tabs */}
+          <div className="mb-6">
+            <div className="border-b border-gray-200">
+              <nav className="-mb-px flex space-x-8">
+                <button
+                  onClick={() => setActiveTab('published')}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'published'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  Published Rides ({rides.length})
+                </button>
+                <button
+                  onClick={() => setActiveTab('bookings')}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'bookings'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  My Bookings ({bookings.length})
+                </button>
+                <button
+                  onClick={() => setActiveTab('requests')}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'requests'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  Booking Requests ({bookingRequests.filter(r => r.booking_status === 'pending').length})
+                </button>
+              </nav>
             </div>
           </div>
 
@@ -347,157 +629,692 @@ const MyRidesPage: React.FC = () => {
             </div>
           )}
 
-          {/* Rides List */}
-          {rides.length === 0 ? (
-            <div className="bg-white rounded-lg shadow-sm border p-12 text-center">
-              <Car className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">No rides published yet</h3>
-              <p className="text-gray-600 mb-6">
-                Start sharing rides with others by publishing your first ride
-              </p>
-              <button
-                onClick={() => router.push('/publish')}
-                className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition"
-              >
-                Publish Your First Ride
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {rides.map((ride) => (
-                <div key={ride.ride_id} className="bg-white rounded-lg shadow-sm border p-6 hover:shadow-md transition">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-4">
-                        <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                          {getVehicleIcon(ride.vehicle_type)}
-                        </div>
-                        <div>
-                          <div className="font-semibold text-gray-900 capitalize">
-                            {ride.vehicle_type} • {ride.seats_total} seats
-                          </div>
-                          <div className="text-sm text-gray-500">
-                            Created {formatDate(ride.created_at)}
-                          </div>
-                        </div>
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(ride.status)}`}>
-                          {ride.status.toUpperCase()}
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {/* Route Information */}
-                        <div className="space-y-3">
-                          <div className="flex items-center gap-3">
-                            <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                            <div>
-                              <div className="text-sm text-gray-500">From</div>
-                              <div className="font-semibold text-lg">
-                                {ride.origin_state || 'Unknown State'}
-                              </div>
-                              {ride.origin && (
-                                <div className="text-sm text-gray-600 mt-1">
-                                  📍 {ride.origin}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                          
-                          {ride.stops && ride.stops.length > 0 && (
-                            <div className="ml-6 space-y-2">
-                              {ride.stops.map((stop, index) => (
-                                <div key={index} className="flex items-center gap-3">
-                                  <div className="w-2 h-2 rounded-full bg-orange-400"></div>
-                                  <div className="text-sm text-gray-600">{stop.landmark}</div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                          
-                          <div className="flex items-center gap-3">
-                            <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                            <div>
-                              <div className="text-sm text-gray-500">To</div>
-                              <div className="font-semibold text-lg">
-                                {ride.destination_state || 'Unknown State'}
-                              </div>
-                              {ride.destination && (
-                                <div className="text-sm text-gray-600 mt-1">
-                                  📍 {ride.destination}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Trip Details */}
-                        <div className="space-y-3">
-                          <div className="flex items-center gap-3">
-                            <Calendar className="w-4 h-4 text-gray-400" />
-                            <div>
-                              <div className="text-sm text-gray-500">Departure</div>
-                              <div className="font-medium">
-                                {formatDate(ride.departure_time)} at {formatTime(ride.departure_time)}
-                              </div>
-                            </div>
-                          </div>
-                          
-                          {ride.arrival_time && (
-                            <div className="flex items-center gap-3">
-                              <Clock className="w-4 h-4 text-gray-400" />
-                              <div>
-                                <div className="text-sm text-gray-500">Estimated Arrival</div>
-                                <div className="font-medium">{formatTime(ride.arrival_time)}</div>
-                              </div>
-                            </div>
-                          )}
-                          
-                          <div className="flex items-center gap-6">
-                            <div className="flex items-center gap-2">
-                              <Users className="w-4 h-4 text-gray-400" />
-                              <span className="text-sm">
-                                {ride.seats_available}/{ride.seats_total} available
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <IndianRupee className="w-4 h-4 text-gray-400" />
-                              <span className="font-semibold">₹{ride.price_per_seat}</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
+          {/* Published Rides Tab */}
+          {activeTab === 'published' && (
+            <div>
+              {/* Stats Cards for Published Rides */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div className="bg-white p-4 rounded-lg shadow-sm border">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                      <Car className="w-5 h-5 text-blue-600" />
                     </div>
-
-                    {/* Actions */}
-                    <div className="flex items-center gap-2 ml-4">
-                      <button
-                        className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition"
-                        title="View Details"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      <button
-                        className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition"
-                        title="Edit Ride"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteRide(ride)}
-                        className={`p-2 rounded-lg transition ${
-                          ride.status === 'open' 
-                            ? 'text-gray-400 hover:text-red-600 hover:bg-red-50' 
-                            : 'text-gray-300 cursor-not-allowed'
-                        }`}
-                        title={ride.status === 'open' ? 'Delete Ride' : 'Cannot delete - ride is not open'}
-                        disabled={ride.status !== 'open'}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                    <div>
+                      <div className="text-2xl font-bold text-gray-900">{rides.length}</div>
+                      <div className="text-sm text-gray-500">Total Rides</div>
                     </div>
                   </div>
                 </div>
-              ))}
+                
+                <div className="bg-white p-4 rounded-lg shadow-sm border">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                      <Users className="w-5 h-5 text-green-600" />
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold text-gray-900">
+                        {rides.filter(r => r.status === 'open').length}
+                      </div>
+                      <div className="text-sm text-gray-500">Active Rides</div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="bg-white p-4 rounded-lg shadow-sm border">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                      <Calendar className="w-5 h-5 text-purple-600" />
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold text-gray-900">
+                        {rides.filter(r => r.status === 'completed').length}
+                      </div>
+                      <div className="text-sm text-gray-500">Completed</div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="bg-white p-4 rounded-lg shadow-sm border">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
+                      <IndianRupee className="w-5 h-5 text-orange-600" />
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold text-gray-900">
+                        ₹{rides.reduce((total, ride) => total + (ride.price_per_seat * (ride.seats_total - ride.seats_available)), 0).toLocaleString()}
+                      </div>
+                      <div className="text-sm text-gray-500">Total Earnings</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Published Rides List */}
+              {rides.length === 0 ? (
+                <div className="bg-white rounded-lg shadow-sm border p-12 text-center">
+                  <Car className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">No rides published yet</h3>
+                  <p className="text-gray-600 mb-6">
+                    Start sharing rides with others by publishing your first ride
+                  </p>
+                  <button
+                    onClick={() => router.push('/publish')}
+                    className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition"
+                  >
+                    Publish Your First Ride
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {rides.map((ride) => (
+                    <div key={ride.ride_id} className="bg-white rounded-lg shadow-sm border p-6 hover:shadow-md transition">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-4">
+                            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                              {getVehicleIcon(ride.vehicle_type)}
+                            </div>
+                            <div>
+                              <div className="font-semibold text-gray-900 capitalize">
+                                {ride.vehicle_type} • {ride.seats_total} seats
+                              </div>
+                              <div className="text-sm text-gray-500">
+                                Created {formatDate(ride.created_at)}
+                              </div>
+                            </div>
+                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(ride.status)}`}>
+                              {ride.status.toUpperCase()}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            {/* Route Information */}
+                            <div className="space-y-3">
+                              <div className="flex items-center gap-3">
+                                <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                                <div>
+                                  <div className="text-sm text-gray-500">From</div>
+                                  <div className="font-semibold text-lg">
+                                    {ride.origin_state || 'Unknown State'}
+                                  </div>
+                                  {ride.origin && (
+                                    <div className="text-sm text-gray-600 mt-1">
+                                      📍 {ride.origin}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              
+                              {ride.stops && ride.stops.length > 0 && (
+                                <div className="ml-6 space-y-2">
+                                  {ride.stops.map((stop, index) => (
+                                    <div key={index} className="flex items-center gap-3">
+                                      <div className="w-2 h-2 rounded-full bg-orange-400"></div>
+                                      <div className="text-sm text-gray-600">{stop.landmark}</div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              
+                              <div className="flex items-center gap-3">
+                                <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                                <div>
+                                  <div className="text-sm text-gray-500">To</div>
+                                  <div className="font-semibold text-lg">
+                                    {ride.destination_state || 'Unknown State'}
+                                  </div>
+                                  {ride.destination && (
+                                    <div className="text-sm text-gray-600 mt-1">
+                                      📍 {ride.destination}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Trip Details */}
+                            <div className="space-y-3">
+                              <div className="flex items-center gap-3">
+                                <Calendar className="w-4 h-4 text-gray-400" />
+                                <div>
+                                  <div className="text-sm text-gray-500">Departure</div>
+                                  <div className="font-medium">
+                                    {formatDate(ride.departure_time)} at {formatTime(ride.departure_time)}
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              {ride.arrival_time && (
+                                <div className="flex items-center gap-3">
+                                  <Clock className="w-4 h-4 text-gray-400" />
+                                  <div>
+                                    <div className="text-sm text-gray-500">Estimated Arrival</div>
+                                    <div className="font-medium">{formatTime(ride.arrival_time)}</div>
+                                  </div>
+                                </div>
+                              )}
+                              
+                              <div className="flex items-center gap-6">
+                                <div className="flex items-center gap-2">
+                                  <Users className="w-4 h-4 text-gray-400" />
+                                  <span className="text-sm">
+                                    {ride.seats_available}/{ride.seats_total} available
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <IndianRupee className="w-4 h-4 text-gray-400" />
+                                  <span className="font-semibold">₹{ride.price_per_seat}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex items-center gap-2 ml-4">
+                          <button
+                            onClick={() => {
+                              // Additional check to prevent booking own rides from dashboard
+                              if (user?.uid === ride.driver_id) {
+                                toast.error('This is your own ride. Use the actions below to manage it.');
+                                return;
+                              }
+                              router.push(`/book/${ride.ride_id}`);
+                            }}
+                            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition"
+                            title="View Details"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button
+                            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition"
+                            title="Edit Ride"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteItem(ride, 'ride')}
+                            className={`p-2 rounded-lg transition ${
+                              ride.status === 'open' 
+                                ? 'text-gray-400 hover:text-red-600 hover:bg-red-50' 
+                                : 'text-gray-300 cursor-not-allowed'
+                            }`}
+                            title={ride.status === 'open' ? 'Delete Ride' : 'Cannot delete - ride is not open'}
+                            disabled={ride.status !== 'open'}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Bookings Tab */}
+          {activeTab === 'bookings' && (
+            <div>
+              {/* Bookings Stats */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div className="bg-white p-4 rounded-lg shadow-sm border">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                      <MessageSquare className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold text-gray-900">{bookings.length}</div>
+                      <div className="text-sm text-gray-500">Total Requests</div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="bg-white p-4 rounded-lg shadow-sm border">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
+                      <AlertCircle className="w-5 h-5 text-yellow-600" />
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold text-gray-900">
+                        {bookings.filter(b => b.booking_status === 'pending').length}
+                      </div>
+                      <div className="text-sm text-gray-500">Pending</div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="bg-white p-4 rounded-lg shadow-sm border">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                      <CheckCircle className="w-5 h-5 text-green-600" />
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold text-gray-900">
+                        {bookings.filter(b => b.booking_status === 'approved').length}
+                      </div>
+                      <div className="text-sm text-gray-500">Approved</div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="bg-white p-4 rounded-lg shadow-sm border">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+                      <XCircle className="w-5 h-5 text-red-600" />
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold text-gray-900">
+                        {bookings.filter(b => b.booking_status === 'denied').length}
+                      </div>
+                      <div className="text-sm text-gray-500">Denied</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bookings List */}
+              {bookings.length === 0 ? (
+                <div className="bg-white rounded-lg shadow-sm border p-12 text-center">
+                  <MessageSquare className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">No booking requests yet</h3>
+                  <p className="text-gray-600 mb-6">
+                    Start booking rides to see your requests here
+                  </p>
+                  <button
+                    onClick={() => router.push('/book')}
+                    className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition"
+                  >
+                    Book Your First Ride
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {bookings.map((booking) => (
+                    <div key={booking.booking_id} className="bg-white rounded-lg shadow-sm border p-6 hover:shadow-md transition">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-4">
+                            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                              <Car className="w-4 h-4 text-blue-600" />
+                            </div>
+                            <div>
+                              <div className="font-semibold text-gray-900 capitalize">
+                                {booking.ride.vehicle_type} • {booking.seats_booked} seat{booking.seats_booked > 1 ? 's' : ''}
+                              </div>
+                              <div className="text-sm text-gray-500">
+                                Requested on {new Date(booking.created_at).toLocaleDateString()}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {getStatusIcon(booking.booking_status)}
+                              <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(booking.booking_status)}`}>
+                                {booking.booking_status.toUpperCase()}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Show driver contact info for approved bookings */}
+                          {booking.booking_status === 'approved' && (
+                            <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+                              <div className="flex items-center gap-3 mb-3">
+                                <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center overflow-hidden">
+                                  {booking.ride.driver.profile_url ? (
+                                    <img 
+                                      src={booking.ride.driver.profile_url} 
+                                      alt={booking.ride.driver.display_name}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <span className="text-lg font-medium text-green-700">
+                                      {booking.ride.driver.display_name.charAt(0).toUpperCase()}
+                                    </span>
+                                  )}
+                                </div>
+                                <div>
+                                  <h4 className="font-semibold text-green-900">
+                                    {booking.ride.driver.first_name && booking.ride.driver.last_name 
+                                      ? `${booking.ride.driver.first_name} ${booking.ride.driver.last_name}`
+                                      : booking.ride.driver.display_name
+                                    }
+                                  </h4>
+                                  <p className="text-sm text-green-700">Your driver's contact details</p>
+                                </div>
+                              </div>
+                              
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                {booking.ride.driver.phone && (
+                                  <a 
+                                    href={`tel:${booking.ride.driver.phone}`}
+                                    className="flex items-center justify-center gap-2 bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors text-sm font-medium"
+                                  >
+                                    <Phone className="w-4 h-4" />
+                                    Call {booking.ride.driver.first_name || booking.ride.driver.display_name}
+                                  </a>
+                                )}
+                                
+                              </div>
+                              
+                              <div className="mt-3 text-xs text-green-700">
+                                <p>Use the buttons above to contact your driver directly</p>
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            {/* Route Information */}
+                            <div className="space-y-3">
+                              <div className="flex items-center gap-3">
+                                <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                                <div>
+                                  <div className="text-sm text-gray-500">From</div>
+                                  <div className="font-semibold text-lg">
+                                    {booking.ride.origin_state || 'Unknown State'}
+                                  </div>
+                                  <div className="text-sm text-gray-600 mt-1">
+                                    {booking.ride.origin}
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              <div className="flex items-center gap-3">
+                                <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                                <div>
+                                  <div className="text-sm text-gray-500">To</div>
+                                  <div className="font-semibold text-lg">
+                                    {booking.ride.destination_state || 'Unknown State'}
+                                  </div>
+                                  <div className="text-sm text-gray-600 mt-1">
+                                    📍 {booking.ride.destination}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Booking Details */}
+                            <div className="space-y-3">
+                              <div className="flex items-center gap-3">
+                                <Calendar className="w-4 h-4 text-gray-400" />
+                                <div>
+                                  <div className="text-sm text-gray-500">Departure</div>
+                                  <div className="font-medium">
+                                    {new Date(booking.ride.departure_time).toLocaleDateString()} at {new Date(booking.ride.departure_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              <div className="flex items-center gap-3">
+                                <Users className="w-4 h-4 text-gray-400" />
+                                <div>
+                                  <div className="text-sm text-gray-500">Driver</div>
+                                  <div className="font-medium">{booking.ride.driver.display_name}</div>
+                                </div>
+                              </div>
+                              
+                              <div className="flex items-center gap-3">
+                                <IndianRupee className="w-4 h-4 text-gray-400" />
+                                <div>
+                                  <div className="text-sm text-gray-500">Total Cost</div>
+                                  <div className="font-semibold">₹{booking.ride.price_per_seat * booking.seats_booked}</div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Message */}
+                          {booking.request_message && (
+                            <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                              <div className="text-sm text-gray-500 mb-1">Your message:</div>
+                              <div className="text-sm text-gray-700">"{booking.request_message}"</div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex items-center gap-2 ml-4">
+                          <button
+                            onClick={() => {
+                              // Prevent viewing own rides as bookable rides
+                              if (user?.uid === booking.ride.driver_id) {
+                                toast.error('This is your own ride. Check your Published Rides tab to manage it.');
+                                return;
+                              }
+                              router.push(`/book/${booking.ride_id}`);
+                            }}
+                            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition"
+                            title="View Ride Details"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          {booking.booking_status === 'pending' && (
+                            <button
+                              onClick={() => handleDeleteItem(booking, 'booking')}
+                              className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+                              title="Cancel Request"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Booking Requests Tab */}
+          {activeTab === 'requests' && (
+            <div>
+              {/* Requests Stats */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div className="bg-white p-4 rounded-lg shadow-sm border">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
+                      <AlertCircle className="w-5 h-5 text-yellow-600" />
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold text-gray-900">
+                        {bookingRequests.filter(r => r.booking_status === 'pending').length}
+                      </div>
+                      <div className="text-sm text-gray-500">Pending Requests</div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="bg-white p-4 rounded-lg shadow-sm border">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                      <CheckCircle className="w-5 h-5 text-green-600" />
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold text-gray-900">
+                        {bookingRequests.filter(r => r.booking_status === 'approved').length}
+                      </div>
+                      <div className="text-sm text-gray-500">Approved</div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="bg-white p-4 rounded-lg shadow-sm border">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+                      <XCircle className="w-5 h-5 text-red-600" />
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold text-gray-900">
+                        {bookingRequests.filter(r => r.booking_status === 'denied').length}
+                      </div>
+                      <div className="text-sm text-gray-500">Denied</div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="bg-white p-4 rounded-lg shadow-sm border">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                      <MessageSquare className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold text-gray-900">{bookingRequests.length}</div>
+                      <div className="text-sm text-gray-500">Total Requests</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Requests List */}
+              {bookingRequests.length === 0 ? (
+                <div className="bg-white rounded-lg shadow-sm border p-12 text-center">
+                  <MessageSquare className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">No booking requests yet</h3>
+                  <p className="text-gray-600 mb-6">
+                    When passengers request to book your rides, they'll appear here
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {bookingRequests.map((request) => (
+                    <div key={request.booking_id} className="bg-white rounded-lg shadow-sm border p-6 hover:shadow-md transition">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-4">
+                            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center overflow-hidden">
+                              {request.passenger.profile_url ? (
+                                <img 
+                                  src={request.passenger.profile_url} 
+                                  alt={request.passenger.display_name}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <span className="text-lg font-medium text-blue-700">
+                                  {request.passenger.display_name.charAt(0).toUpperCase()}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-3">
+                                <h4 className="font-semibold text-gray-900">
+                                  {request.passenger.first_name && request.passenger.last_name 
+                                    ? `${request.passenger.first_name} ${request.passenger.last_name}`
+                                    : request.passenger.display_name
+                                  }
+                                </h4>
+                                <div className="flex items-center gap-2">
+                                  {getStatusIcon(request.booking_status)}
+                                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(request.booking_status)}`}>
+                                    {request.booking_status.toUpperCase()}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="text-sm text-gray-500">
+                                Requested {request.seats_booked} seat{request.seats_booked > 1 ? 's' : ''} • 
+                                {new Date(request.created_at).toLocaleDateString()}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Ride Details */}
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-4">
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2">
+                                <Calendar className="w-4 h-4 text-gray-400" />
+                                <span className="text-sm text-gray-600">
+                                  {formatDate(request.ride.departure_time)} at {formatTime(request.ride.departure_time)}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Car className="w-4 h-4 text-gray-400" />
+                                <span className="text-sm text-gray-600 capitalize">
+                                  {request.ride.vehicle_type}
+                                </span>
+                              </div>
+                            </div>
+                            
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm text-gray-500">Route:</span>
+                                <span className="text-sm font-medium">
+                                  {request.ride.origin} → {request.ride.destination}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <IndianRupee className="w-4 h-4 text-gray-400" />
+                                <span className="text-sm font-medium">
+                                  ₹{request.ride.price_per_seat * request.seats_booked} total
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Request Message */}
+                          {request.request_message && (
+                            <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                              <div className="text-sm text-gray-500 mb-1">Message from passenger:</div>
+                              <div className="text-sm text-gray-700">"{request.request_message}"</div>
+                            </div>
+                          )}
+
+                          {/* Contact Info for Approved Requests */}
+                          {request.booking_status === 'approved' && (
+                            <div className="mb-4 p-4">
+                              <div className="flex justify-left">
+                                {request.passenger.phone && (
+                                  <a 
+                                    href={`tel:${request.passenger.phone}`}
+                                    className="flex items-center justify-center gap-2 bg-green-500 text-white px-6 py-3 rounded-lg hover:bg-green-600 transition-colors font-medium"
+                                  >
+                                    <Phone className="w-4 h-4" />
+                                    Connect with {request.passenger.first_name || request.passenger.display_name.split(' ')[0] || 'Passenger'}
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex flex-col gap-2 ml-4">
+                          {request.booking_status === 'pending' ? (
+                            <>
+                              <button
+                                onClick={() => handleBookingResponse(request.booking_id, 'approved')}
+                                disabled={processingRequest === request.booking_id}
+                                className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 disabled:opacity-50 transition text-sm font-medium min-w-[80px]"
+                              >
+                                {processingRequest === request.booking_id ? 'Processing...' : 'Approve'}
+                              </button>
+                              <button
+                                onClick={() => handleBookingResponse(request.booking_id, 'denied')}
+                                disabled={processingRequest === request.booking_id}
+                                className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 disabled:opacity-50 transition text-sm font-medium min-w-[80px]"
+                              >
+                                {processingRequest === request.booking_id ? 'Processing...' : 'Deny'}
+                              </button>
+                            </>
+                          ) : (
+                            <div className="text-center">
+                              <div className={`px-3 py-2 rounded-lg text-sm font-medium min-w-[80px] ${
+                                request.booking_status === 'approved' 
+                                  ? 'bg-green-100 text-green-800' 
+                                  : 'bg-red-100 text-red-800'
+                              }`}>
+                                {request.booking_status === 'approved' ? 'Approved' : 'Denied'}
+                              </div>
+                              {request.responded_at && (
+                                <div className="text-xs text-gray-500 mt-1">
+                                  {new Date(request.responded_at).toLocaleDateString()}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -505,16 +1322,22 @@ const MyRidesPage: React.FC = () => {
       
       <Footer />
 
-      {/* Delete Confirmation Dialog */}
-      {deleteDialog.ride && (
+      {/* Delete/Cancel Confirmation Dialog */}
+      {deleteDialog.item && (
         <DeleteConfirmationDialog
           isOpen={deleteDialog.isOpen}
-          onClose={cancelDeleteRide}
-          onConfirm={confirmDeleteRide}
+          onClose={cancelDeleteItem}
+          onConfirm={confirmDeleteItem}
           rideDetails={{
-            origin: deleteDialog.ride.origin,
-            destination: deleteDialog.ride.destination,
-            departure_time: deleteDialog.ride.departure_time
+            origin: deleteDialog.type === 'ride' 
+              ? (deleteDialog.item as Ride).origin 
+              : (deleteDialog.item as RideBooking).ride.origin,
+            destination: deleteDialog.type === 'ride' 
+              ? (deleteDialog.item as Ride).destination 
+              : (deleteDialog.item as RideBooking).ride.destination,
+            departure_time: deleteDialog.type === 'ride' 
+              ? (deleteDialog.item as Ride).departure_time 
+              : (deleteDialog.item as RideBooking).ride.departure_time
           }}
           isLoading={deleteDialog.isLoading}
         />
@@ -524,3 +1347,5 @@ const MyRidesPage: React.FC = () => {
 };
 
 export default MyRidesPage;
+
+

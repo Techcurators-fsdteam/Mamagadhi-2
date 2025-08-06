@@ -59,14 +59,6 @@ const PublishDetailsPage: React.FC = () => {
     }
   }, [passengersParam, vehicleTypeParam, router]);
 
-  // Check if user is authenticated
-  useEffect(() => {
-    if (!authLoading && !user) {
-      toast.error('Please login to publish a ride');
-      router.replace('/'); // Redirect to login
-    }
-  }, [authLoading, user, router]);
-
   // Form state
   const [formData, setFormData] = useState({
     origin: '',
@@ -481,23 +473,6 @@ const PublishDetailsPage: React.FC = () => {
 
   if (!passengersParam || !vehicleTypeParam) {
     return null; // Will redirect
-  }
-
-  // Show loading while authenticating
-  if (authLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Show error if not authenticated
-  if (!user) {
-    return null; // Will redirect to login
   }
 
   return (

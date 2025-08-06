@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Command, CommandEmpty, CommandGroup, CommandItem } from './ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
@@ -50,6 +50,62 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSearch }) => {
 
   const passengerCounts = Array.from({ length: 16 }, (_, i) => i + 1);
 
+  // Restore search form values from session storage
+  useEffect(() => {
+    const restoreSearchForm = () => {
+      try {
+        const savedCriteria = sessionStorage.getItem('lastSearchCriteria');
+        if (savedCriteria) {
+          const criteria = JSON.parse(savedCriteria);
+          setFrom(criteria.origin?.location || '');
+          setTo(criteria.destination?.location || '');
+          setDate(criteria.travelDate || '');
+          setPassengers(criteria.passengersNeeded || 1);
+          setVehicleType(criteria.vehiclePreferences?.[0] || '');
+          
+          // Restore selected locations if available
+          if (criteria.origin) {
+            setSelectedOrigin({
+              name: criteria.origin.location,
+              coordinates: criteria.origin.coordinates,
+              fullAddress: criteria.origin.state ? `${criteria.origin.location}, ${criteria.origin.state}` : criteria.origin.location,
+              placeType: ['place'], // Default or restore if available
+            });
+          }
+          
+          if (criteria.destination) {
+            setSelectedDestination({
+              name: criteria.destination.location,
+              coordinates: criteria.destination.coordinates,
+              fullAddress: criteria.destination.state ? `${criteria.destination.location}, ${criteria.destination.state}` : criteria.destination.location,
+              placeType: ['place'], // Default or restore if available
+            });
+          }
+        }
+      } catch (error) {
+        console.warn('Failed to restore search form:', error);
+      }
+    };
+
+    restoreSearchForm();
+  }, []);
+
+  // Save search form values to session storage when they change
+  useEffect(() => {
+    if (from || to || date) {
+      const searchFormState = {
+        from,
+        to,
+        date,
+        passengers,
+        vehicleType,
+        selectedOrigin,
+        selectedDestination
+      };
+      sessionStorage.setItem('searchFormState', JSON.stringify(searchFormState));
+    }
+  }, [from, to, date, passengers, vehicleType, selectedOrigin, selectedDestination]);
+
   const searchOriginLocations = async (query: string) => {
     if (query.length < 2) return setOriginSearchResults([]);
     try {
@@ -91,6 +147,9 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSearch }) => {
         vehiclePreferences: vehicleType ? [vehicleType] : [],
         maxRadius: 30000
       };
+
+      // Store search criteria immediately
+      sessionStorage.setItem('lastSearchCriteria', JSON.stringify(searchCriteria));
 
       if (onSearch) {
         onSearch(searchCriteria);
@@ -319,4 +378,4 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSearch }) => {
   );
 };
 
-export default SearchBar; 
+export default SearchBar;
