@@ -2,14 +2,12 @@
 import React, { useState, useEffect } from 'react';
 import {
   ArrowLeftIcon,
-  ArrowRightIcon,
   ChatBubbleLeftEllipsisIcon,
   CheckBadgeIcon,
   CreditCardIcon,
   InformationCircleIcon,
   PhoneIcon,
   ShieldCheckIcon,
-  StarIcon,
   TruckIcon,
   XCircleIcon
 } from '@heroicons/react/24/outline';
