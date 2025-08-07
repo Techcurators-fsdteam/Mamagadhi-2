@@ -1,16 +1,16 @@
 "use client"
 import React, { useState, useEffect } from 'react';
 import {
-  ArrowLeftIcon,
-  ChatBubbleLeftEllipsisIcon,
-  CheckBadgeIcon,
-  CreditCardIcon,
-  InformationCircleIcon,
-  PhoneIcon,
-  ShieldCheckIcon,
-  TruckIcon,
-  XCircleIcon
-} from '@heroicons/react/24/outline';
+  IoArrowBack as ArrowLeftIcon,
+  IoChatbubbleEllipsesOutline as ChatBubbleLeftEllipsisIcon,
+  IoCheckmarkCircleOutline as CheckBadgeIcon,
+  IoCardOutline as CreditCardIcon,
+  IoInformationCircleOutline as InformationCircleIcon,
+  IoCallOutline as PhoneIcon,
+  IoShieldCheckmarkOutline as ShieldCheckIcon,
+  IoCarOutline as TruckIcon,
+  IoCloseCircleOutline as XCircleIcon
+} from 'react-icons/io5';
 import Navbar from '../../../components/Navbar';
 import Footer from '../../../components/Footer';
 import { useRouter, useParams } from 'next/navigation';
