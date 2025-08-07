@@ -1,5 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 
 const Footer = () => {
   return (
@@ -62,15 +63,7 @@ const Footer = () => {
 
         {/* Contact & Social */}
         <div className="flex flex-col items-start md:items-end">
-          <div className="mb-4">
-            <h3 className="text-lg font-semibold mb-2">Connect With Us</h3>
-            <p className="text-sm mb-2">
-              Email: <a href="mailto:venuch@mamaghadi.com" className="hover:underline">venuch@mamaghadi.com</a>
-            </p>
-            <p className="text-sm">
-              Phone: <a href="tel:+919963477751" className="hover:underline">+91 99634 77751</a>
-            </p>
-          </div>
+          
           <div className="flex gap-4">
             <a href="#" aria-label="Facebook" className="hover:opacity-80 transition">
               <FacebookIcon />
@@ -84,6 +77,19 @@ const Footer = () => {
             <a href="#" aria-label="Instagram" className="hover:opacity-80 transition">
               <InstagramIcon />
             </a>
+          </div>
+          
+          {/* Brand Logo */}
+          <div className="mt-6 flex items-center md:justify-end">
+            <div className="bg-white rounded-3xl flex items-center justify-center p-2">
+              <Image
+                src="/logo.png"
+                alt="Mamagadhi Logo"
+                width={170}
+                height={50}
+                className="object-contain"
+              />
+            </div>
           </div>
         </div>
 
