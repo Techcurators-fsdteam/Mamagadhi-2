@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { auth } from '../firebase/config';
 import { 
   createUserWithEmailAndPassword,
@@ -38,7 +39,7 @@ export default function SignupPopup({ isOpen, onClose, onSwitchToLogin }: Signup
     email: '',
     password: '',
     confirmPassword: '',
-    phone: ''
+    phone: '+91'
   });
 
   useEffect(() => {
@@ -63,7 +64,7 @@ export default function SignupPopup({ isOpen, onClose, onSwitchToLogin }: Signup
   if (!isOpen) return null;
 
   const isValidPhone = (phone: string) => {
-    return /^\+[1-9]\d{1,14}$/.test(phone);
+    return /^\+91[6-9]\d{9}$/.test(phone);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -71,6 +72,14 @@ export default function SignupPopup({ isOpen, onClose, onSwitchToLogin }: Signup
     setFormData(prev => ({
       ...prev,
       [name]: value
+    }));
+  };
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.replace(/\D/g, '').slice(0, 10);
+    setFormData(prev => ({
+      ...prev,
+      phone: '+91' + value
     }));
   };
 
@@ -90,7 +99,7 @@ export default function SignupPopup({ isOpen, onClose, onSwitchToLogin }: Signup
     }
 
     if (!isValidPhone(formData.phone)) {
-      setError('Please enter a valid phone number in E.164 format (e.g., +1234567890)');
+      setError('Please enter a valid 10-digit Indian phone number');
       return;
     }
 
@@ -304,7 +313,7 @@ export default function SignupPopup({ isOpen, onClose, onSwitchToLogin }: Signup
       email: '',
       password: '',
       confirmPassword: '',
-      phone: ''
+      phone: '+91'
     });
     setOtp('');
     setError('');
@@ -323,10 +332,15 @@ export default function SignupPopup({ isOpen, onClose, onSwitchToLogin }: Signup
         </button>
 
         <div className="text-center mb-6">
-          <h1 className="text-3xl font-extrabold text-black/50 mb-2">
-            Mamagadhi
-          </h1>
-          <div className="w-16 h-1 bg-black/20 mx-auto rounded-full"></div>
+          <div className="bg-white rounded-3xl inline-flex items-center justify-center p-2">
+            <Image
+              src="/logo.png"
+              alt="Mamagadhi Logo"
+              width={170}
+              height={50}
+              className="object-contain"
+            />
+          </div>
           <p className="text-sm text-black/90 mt-2">
             {step === 'form' && 'Create your account'}
             {step === 'phone-verification' && 'Verify your phone number'}
@@ -390,18 +404,24 @@ export default function SignupPopup({ isOpen, onClose, onSwitchToLogin }: Signup
               <label htmlFor="phone" className="block text-sm font-medium text-black/50 mb-2">
                 Phone Number
               </label>
-              <input
-                type="tel"
-                id="phone"
-                name="phone"
-                value={formData.phone}
-                onChange={handleInputChange}
-                required
-                className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#35a4c9] focus:border-transparent outline-none transition-all text-black/80 placeholder-gray-500"
-                placeholder="+1234567890"
-              />
+              <div className="flex">
+                <div className="flex items-center px-3 py-3 bg-gray-100 border border-r-0 border-gray-300 rounded-l-lg text-gray-700">
+                  +91
+                </div>
+                <input
+                  type="tel"
+                  id="phone"
+                  name="phone"
+                  value={formData.phone.replace('+91', '')}
+                  onChange={handlePhoneChange}
+                  required
+                  className="flex-1 px-4 py-3 bg-white border border-gray-300 rounded-r-lg focus:ring-2 focus:ring-[#35a4c9] focus:border-transparent outline-none transition-all text-black/80 placeholder-gray-500"
+                  placeholder="Enter 10-digit number"
+                  maxLength={10}
+                />
+              </div>
               <p className="text-xs text-black/80 mt-1">
-                Use E.164 format (e.g., +1234567890)
+                Enter your 10-digit mobile number
               </p>
             </div>
 
@@ -481,12 +501,8 @@ export default function SignupPopup({ isOpen, onClose, onSwitchToLogin }: Signup
               />
               <label htmlFor="terms" className="ml-2 text-sm text-black/80">
                 I agree to the{' '}
-                <a href="#" className="text-black/80 font-medium hover:underline">
-                  Terms of Service
-                </a>{' '}
-                and{' '}
-                <a href="#" className="text-black/80 font-medium hover:underline">
-                  Privacy Policy
+                <a href="/info/privacy-policy" className="text-black/80 font-medium hover:underline">
+                  Terms of Service and Privacy Policy
                 </a>
               </label>
             </div>

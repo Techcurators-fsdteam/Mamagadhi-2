@@ -37,11 +37,6 @@ const PassengerInformationSection: React.FC<PassengerInformationSectionProps> = 
     <div className="lg:col-span-2 p-6 lg:p-8">
       <div className="bg-white rounded-lg p-6 h-full">
         <div className="flex items-center mb-6">
-          <div className="w-12 h-12 bg-[#4AAAFF] rounded-lg flex items-center justify-center mr-4">
-            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-            </svg>
-          </div>
           <div>
             <h3 className="text-2xl font-bold text-gray-900 mb-1">Passenger Information</h3>
             <p className="text-gray-600">Your personal details and preferences</p>
