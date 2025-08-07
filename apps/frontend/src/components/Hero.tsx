@@ -1,5 +1,7 @@
+"use client";
 import React, { useState } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import SearchBar from './SearchBar';
 import FeatureSection from './FeatureSection';
 import PopularRoutes from './PopularRoutes';
@@ -47,12 +49,10 @@ const Hero = () => {
         </div>
       </section>
 
-      {/* Features section - FULL WIDTH */}
+      {/* Features section */}
       <section className="w-screen bg-white ">
         <FeatureSection />
       </section>
-
-
 
       {/* Ride Sharing With Mamaghadi */}
       <section className="w-screen relative left-1/2 right-1/2 -mx-[50vw] bg-[#4AAEFF] py-6 sm:py-10 px-4 sm:px-12">
@@ -64,9 +64,11 @@ const Hero = () => {
             <p className="mb-6 max-w-lg text-sm sm:text-base md:text-lg leading-relaxed opacity-90">
               Mamaghadi is a flexible, community-driven ride-sharing platform connecting travelers with everyday people offering rides—bikes, cars, vans, or shared buses.
             </p>
-            <button className="bg-white text-[#4AAEFF] px-8 py-3 rounded-full font-semibold shadow-md hover:bg-blue-50 transition text-base">
-              Share a Ride
-            </button>
+            <Link href="/info/about-us" passHref>
+              <button className="bg-white text-[#4AAEFF] px-8 py-3 rounded-full font-semibold shadow-md hover:bg-blue-50 transition text-base">
+                Learn About Us
+              </button>
+            </Link>
           </div>
           <div className="flex-1 flex justify-center">
             <Image src="/hero2.svg" alt="Carpool" width={420} height={420} className="w-[280px] sm:w-[360px] md:w-[420px] h-auto" />
@@ -94,9 +96,11 @@ const Hero = () => {
             <p className="text-gray-600 mb-8 max-w-md mx-auto md:mx-0 text-base sm:text-lg leading-relaxed">
               We&apos;re working hard to make Mamaghadi as secure as possible. Know how to avoid and report scams by following our safety guidelines.
             </p>
-            <button className="bg-[#F8FAFF] text-[#4AAEFF] px-8 py-3 rounded-full font-semibold border border-[#4AAEFF] hover:bg-[#E6F2FF] transition-colors text-base">
-              Learn More
-            </button>
+            <Link href="/info/contact-us" passHref>
+              <button className="bg-[#F8FAFF] text-[#4AAEFF] px-8 py-3 rounded-full font-semibold border border-[#4AAEFF] hover:bg-[#E6F2FF] transition-colors text-base">
+                Contact Us
+              </button>
+            </Link>
           </div>
         </div>
       </section>
@@ -123,7 +127,7 @@ const Hero = () => {
               },
               {
                 title: "How do I cancel my ride?",
-                desc: "If you have a change of plans, you can always cancel your ride sharing from the &apos;Your rides&apos; section of our website. The sooner you cancel, the better. That way the driver has time to accept new passengers.",
+                desc: "If you have a change of plans, you can always cancel your ride sharing from the 'Your rides' section of our website. The sooner you cancel, the better. That way the driver has time to accept new passengers.",
               },
               {
                 title: "How much does a ride-share cost?",
@@ -168,9 +172,11 @@ const Hero = () => {
           })()}
 
           <div className="flex justify-center mt-12">
-            <a href="#" className="bg-[#4AAEFF] hover:bg-[#2196f3] text-white px-7 py-3 rounded-full font-semibold text-base sm:text-lg transition-all">
-              Read our Help Centre
-            </a>
+            <Link href="/info/privacy-policy" passHref>
+              <button className="bg-[#4AAEFF] hover:bg-[#2196f3] text-white px-7 py-3 rounded-full font-semibold text-base sm:text-lg transition-all">
+                Read our Privacy Policy
+              </button>
+            </Link>
           </div>
         </div>
       </section>

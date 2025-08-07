@@ -5,7 +5,6 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { AuthProvider } from "../lib/auth";
 import { Toaster } from 'react-hot-toast';
-import ErrorBoundary from "../components/ErrorBoundary";
 import { useState } from 'react';
 import AuthGuard from '../components/AuthGuard';
 import LoginPopup from '../components/LoginPopup';
@@ -39,16 +38,15 @@ export default function RootLayout({
         <meta name="description" content="Community-driven ride sharing platform" />
       </head>
       <body className={inter.className}>
-        <ErrorBoundary>
-          <AuthProvider>
-            <AuthGuard onLoginRequired={handleLoginRequired}>
-              <Toaster 
-                position="top-right"
-                toastOptions={{
-                  duration: 4000,
-                  style: {
-                    background: '#363636',
-                    color: '#fff',
+        <AuthProvider>
+          <AuthGuard onLoginRequired={handleLoginRequired}>
+            <Toaster 
+              position="top-right"
+              toastOptions={{
+                duration: 4000,
+                style: {
+                  background: '#363636',
+                  color: '#fff',
                   },
                   success: {
                     style: {
@@ -63,28 +61,27 @@ export default function RootLayout({
                 }}
               />
               {children}
-            </AuthGuard>
+          </AuthGuard>
             
-            {/* Global Login/Signup Popups */}
-            <LoginPopup
-              isOpen={showLoginFromGuard}
-              onClose={() => setShowLoginFromGuard(false)}
-              onSwitchToSignup={() => {
-                setShowLoginFromGuard(false);
-                setShowSignup(true);
-              }}
-            />
-            
-            <SignupPopup
-              isOpen={showSignup}
-              onClose={() => setShowSignup(false)}
-              onSwitchToLogin={() => {
-                setShowSignup(false);
-                setShowLoginFromGuard(true);
-              }}
-            />
-          </AuthProvider>
-        </ErrorBoundary>
+          {/* Global Login/Signup Popups */}
+          <LoginPopup
+            isOpen={showLoginFromGuard}
+            onClose={() => setShowLoginFromGuard(false)}
+            onSwitchToSignup={() => {
+              setShowLoginFromGuard(false);
+              setShowSignup(true);
+            }}
+          />
+          
+          <SignupPopup
+            isOpen={showSignup}
+            onClose={() => setShowSignup(false)}
+            onSwitchToLogin={() => {
+              setShowSignup(false);
+              setShowLoginFromGuard(true);
+            }}
+          />
+        </AuthProvider>
       </body>
     </html>
   );

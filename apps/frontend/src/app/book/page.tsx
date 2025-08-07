@@ -1,106 +1,159 @@
-'use client';
-import React, { useState, useEffect } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
-import Navbar from '../../components/Navbar';
-import Footer from '../../components/Footer';
-import SearchBar from '@/components/SearchBar';
-import {Car, User} from 'lucide-react';
-import { enhancedRideSearchClient, RideMatch, SearchResponse } from '@/lib/enhanced-ride-search';
-import { useAuth } from '@/lib/auth';
-import toast from 'react-hot-toast';
+"use client";
+import React, { useState, useEffect } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
+import Navbar from "../../components/Navbar";
+import Footer from "../../components/Footer";
+import SearchBar from "@/components/SearchBar";
+import { Car, User } from "lucide-react";
+import {
+  enhancedRideSearchClient,
+  SearchResponse,
+} from "@/lib/enhanced-ride-search";
+import { useAuth } from "@/lib/auth";
+import toast from "react-hot-toast";
+
+interface RideMatch {
+  ride_id: string;
+  vehicle_type: string;
+  origin: string;
+  destination: string;
+  origin_state: string;
+  destination_state: string;
+  departure_time: string;
+  arrival_time: string;
+  seats_total: number;
+  seats_available: number;
+  price_per_seat: number;
+  status: string;
+  created_at: string;
+  driver_id: string;
+  driver: {
+    display_name: string;
+    first_name: string;
+    last_name: string;
+    profile_picture_url: string | null;
+  };
+  match_percentage: number;
+  match_reason: string;
+  stopovers?: Array<{
+    landmark: string;
+    sequence: number;
+  }>;
+}
 
 function BookRide() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { user, loading: authLoading } = useAuth(); // Add user context
-  const [sortBy, setSortBy] = useState('relevance');
+  const { user, loading: authLoading } = useAuth();
+  const [sortBy, setSortBy] = useState("relevance");
   const [departureTime, setDepartureTime] = useState<string[]>([]);
   const [vehicleTypes, setVehicleTypes] = useState<string[]>([]);
   const [priceRanges, setPriceRanges] = useState<string[]>([]);
-  const [availableVehicleTypes, setAvailableVehicleTypes] = useState<string[]>([]);
+  const [availableVehicleTypes, setAvailableVehicleTypes] = useState<string[]>(
+    []
+  );
   const [searchResults, setSearchResults] = useState<RideMatch[]>([]);
   const [searchMetadata, setSearchMetadata] = useState<any>(null);
+  const [searchOrigin, setSearchOrigin] = useState<string>("");
+  const [searchDestination, setSearchDestination] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [displayedRidesCount, setDisplayedRidesCount] = useState(4); // Show 4 rides initially
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
 
   const handleTimeFilter = (time: string) => {
-    setDepartureTime(prev => 
-      prev.includes(time) 
-        ? prev.filter(t => t !== time)
-        : [...prev, time]
+    setDepartureTime((prev) =>
+      prev.includes(time) ? prev.filter((t) => t !== time) : [...prev, time]
     );
   };
 
   const handleVehicleTypeFilter = (vehicleType: string) => {
-    setVehicleTypes(prev => 
-      prev.includes(vehicleType) 
-        ? prev.filter(v => v !== vehicleType)
+    setVehicleTypes((prev) =>
+      prev.includes(vehicleType)
+        ? prev.filter((v) => v !== vehicleType)
         : [...prev, vehicleType]
     );
   };
 
   const handlePriceFilter = (priceRange: string) => {
-    setPriceRanges(prev => 
-      prev.includes(priceRange) 
-        ? prev.filter(p => p !== priceRange)
+    setPriceRanges((prev) =>
+      prev.includes(priceRange)
+        ? prev.filter((p) => p !== priceRange)
         : [...prev, priceRange]
     );
   };
 
   const clearAllFilters = () => {
-    setSortBy('relevance');
+    setSortBy("relevance");
     setDepartureTime([]);
     setVehicleTypes([]);
     setPriceRanges([]);
   };
 
+  const handleLoadMore = () => {
+    setDisplayedRidesCount((prev) => prev + 4); // Load 4 more rides
+  };
+
   const handleSearch = async (searchCriteria: any) => {
-    console.log('🔍 Enhanced search initiated:', searchCriteria);
-    
+    console.log("🔍 Custom search initiated:", searchCriteria);
+
     setLoading(true);
     setHasSearched(true);
     setSearchError(null);
-    
+    setDisplayedRidesCount(4); // Reset to show 4 rides initially
+
     try {
       // Store search criteria in sessionStorage
-      sessionStorage.setItem('lastSearchCriteria', JSON.stringify(searchCriteria));
-      
-      // Use the enhanced smart search
-      const result: SearchResponse = await enhancedRideSearchClient.smartSearch(
-        searchCriteria.origin?.location || searchCriteria.from,
-        searchCriteria.destination?.location || searchCriteria.to,
-        {
-          travelDate: searchCriteria.travelDate || searchCriteria.date,
-          passengersNeeded: searchCriteria.passengersNeeded || searchCriteria.passengers || 1,
-          vehiclePreferences: searchCriteria.vehiclePreferences || (searchCriteria.vehicleType ? [searchCriteria.vehicleType] : undefined),
-          maxRadius: searchCriteria.maxRadius || 30000, // 30km
-          priceRange: searchCriteria.priceRange,
-          timePreference: searchCriteria.timePreference
-        }
+      sessionStorage.setItem(
+        "lastSearchCriteria",
+        JSON.stringify(searchCriteria)
       );
 
-      console.log('✅ Enhanced search results:', result);
-      
-      if (result.success) {
-        setSearchResults(result.results.rides);
-        setSearchMetadata(result.results.metadata);
-        
-        // Store search results in sessionStorage
-        sessionStorage.setItem('searchResults', JSON.stringify(result.results.rides));
-        sessionStorage.setItem('searchMetadata', JSON.stringify(result.results.metadata));
-        
-        // Extract unique vehicle types from search results
-        const uniqueVehicleTypes = [...new Set(result.results.rides.map(ride => ride.vehicle_type))];
-        setAvailableVehicleTypes(uniqueVehicleTypes);
-        sessionStorage.setItem('availableVehicleTypes', JSON.stringify(uniqueVehicleTypes));
-      } else {
-        throw new Error('Search was not successful');
+      // Extract the required fields from searchCriteria
+      const origin =
+        searchCriteria.origin?.location || searchCriteria.from || "";
+      const destination =
+        searchCriteria.destination?.location || searchCriteria.to || "";
+      const passengersNeeded =
+        searchCriteria.passengersNeeded || searchCriteria.passengers || 1;
+
+      // Store origin and destination for display
+      sessionStorage.setItem("searchOrigin", origin);
+      sessionStorage.setItem("searchDestination", destination);
+
+      // Validate required fields
+      if (!origin || !destination) {
+        throw new Error("Please enter both origin and destination");
       }
+
+      // Use the enhanced smart search with properly structured data
+      const result: SearchResponse = await enhancedRideSearchClient.smartSearch(
+        origin,
+        destination,
+        passengersNeeded
+      );
+
+      console.log("✅ Search completed successfully:", result);
+
+      // Store search criteria in state for display
+      setSearchOrigin(origin);
+      setSearchDestination(destination);
+
+      setSearchResults(result.results.rides || []);
+      setSearchMetadata(result.results.metadata);
+      setSearchError(null);
+
+      // Extract unique vehicle types from search results
+      const uniqueVehicleTypes = [
+        ...new Set(
+          (result.results.rides || []).map((ride) => ride.vehicle_type)
+        ),
+      ];
+      setAvailableVehicleTypes(uniqueVehicleTypes);
     } catch (error) {
-      console.error('❌ Enhanced search error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Search failed. Please try again.';
-      setSearchError(errorMessage);
+      console.error("❌ Search failed:", error);
+      setSearchError(error instanceof Error ? error.message : "Search failed");
       setSearchResults([]);
       setSearchMetadata(null);
     } finally {
@@ -108,417 +161,389 @@ function BookRide() {
     }
   };
 
-  // Handle URL parameters from search bar navigation
-  useEffect(() => {
-    if (!searchParams) return;
-    
-    const from = searchParams.get('from');
-    const to = searchParams.get('to');
-    const date = searchParams.get('date');
-    const passengers = searchParams.get('passengers');
-    const vehicleType = searchParams.get('vehicleType');
+  // Restore search state from sessionStorage
+  const restoreSearchState = () => {
+    try {
+      const savedResults = sessionStorage.getItem("searchResults");
+      const savedMetadata = sessionStorage.getItem("searchMetadata");
+      const savedVehicleTypes = sessionStorage.getItem("availableVehicleTypes");
+      const savedOrigin = sessionStorage.getItem("searchOrigin");
+      const savedDestination = sessionStorage.getItem("searchDestination");
 
-    if (from && to && date) {
-      // Auto-trigger search with URL parameters
-      const searchCriteria = {
-        origin: {
-          coordinates: [77.0, 28.0] as [number, number],
-          location: from,
-          state: "Delhi"
-        },
-        destination: {
-          coordinates: [76.0, 30.0] as [number, number],
-          location: to,
-          state: "Punjab"
-        },
-        travelDate: date,
-        passengersNeeded: passengers ? parseInt(passengers) : 1,
-        vehiclePreferences: vehicleType ? [vehicleType] : [],
-        maxRadius: 30000
-      };
-      
-      handleSearch(searchCriteria);
-    }
-  }, [searchParams]);
-
-  // Restore search state on component mount
-  useEffect(() => {
-    const restoreSearchState = () => {
-      try {
-        const savedResults = sessionStorage.getItem('searchResults');
-        const savedMetadata = sessionStorage.getItem('searchMetadata');
-        const savedVehicleTypes = sessionStorage.getItem('availableVehicleTypes');
-        const savedFilters = sessionStorage.getItem('searchFilters');
-        
-        if (savedResults) {
-          setSearchResults(JSON.parse(savedResults));
-          setHasSearched(true);
-        }
-        
-        if (savedMetadata) {
-          setSearchMetadata(JSON.parse(savedMetadata));
-        }
-        
-        if (savedVehicleTypes) {
-          setAvailableVehicleTypes(JSON.parse(savedVehicleTypes));
-        }
-        
-        if (savedFilters) {
-          const filters = JSON.parse(savedFilters);
-          setSortBy(filters.sortBy || 'relevance');
-          setDepartureTime(filters.departureTime || []);
-          setVehicleTypes(filters.vehicleTypes || []);
-          setPriceRanges(filters.priceRanges || []);
-        }
-      } catch (error) {
-        console.warn('Failed to restore search state:', error);
+      if (savedResults) {
+        setSearchResults(JSON.parse(savedResults));
+        setHasSearched(true);
       }
-    };
 
-    // Only restore state if not coming from URL parameters
-    if (!searchParams || (!searchParams.get('from') && !searchParams.get('to'))) {
-      restoreSearchState();
+      if (savedMetadata) {
+        setSearchMetadata(JSON.parse(savedMetadata));
+      }
+
+      if (savedVehicleTypes) {
+        setAvailableVehicleTypes(JSON.parse(savedVehicleTypes));
+      }
+
+      if (savedOrigin) {
+        setSearchOrigin(savedOrigin);
+      }
+
+      if (savedDestination) {
+        setSearchDestination(savedDestination);
+      }
+    } catch (error) {
+      console.error("Failed to restore search state:", error);
     }
+  };
+
+  // Load saved search state on component mount
+  useEffect(() => {
+    restoreSearchState();
   }, []);
 
-  // Save filter state when filters change
-  useEffect(() => {
-    if (hasSearched) {
-      const filterState = {
-        sortBy,
-        departureTime,
-        vehicleTypes,
-        priceRanges
-      };
-      sessionStorage.setItem('searchFilters', JSON.stringify(filterState));
-    }
-  }, [sortBy, departureTime, vehicleTypes, priceRanges, hasSearched]);
-
-  // Apply client-side filtering and sorting
+  // Apply filters and sorting to search results
   const applyFiltersAndSort = (rides: RideMatch[]): RideMatch[] => {
-    let filtered = [...rides];
+    let filteredRides = [...rides];
 
-    // Apply time filters
-    if (departureTime.length > 0) {
-      filtered = filtered.filter(ride => {
-        const hour = new Date(ride.departure_time).getHours();
-        return departureTime.some(timeRange => {
-          switch (timeRange) {
-            case 'early-morning': return hour >= 4 && hour < 8;   // 4 AM - 8 AM
-            case 'morning': return hour >= 8 && hour < 12;        // 8 AM - 12 PM
-            case 'afternoon': return hour >= 12 && hour < 16;     // 12 PM - 4 PM
-            case 'evening': return hour >= 16 && hour < 20;       // 4 PM - 8 PM
-            case 'night': return hour >= 20 || hour < 4;          // 8 PM - 4 AM
-            default: return true;
-          }
-        });
-      });
-    }
-
-    // Apply vehicle type filters
+    // Apply vehicle type filter
     if (vehicleTypes.length > 0) {
-      filtered = filtered.filter(ride => 
+      filteredRides = filteredRides.filter((ride) =>
         vehicleTypes.includes(ride.vehicle_type)
       );
     }
 
-    // Apply price range filters
+    // Apply departure time filter
+    if (departureTime.length > 0) {
+      filteredRides = filteredRides.filter((ride) => {
+        const rideTime = new Date(ride.departure_time).getHours();
+        return departureTime.some((time) => {
+          const [start, end] = time.split("-").map(Number);
+          return rideTime >= start && rideTime <= end;
+        });
+      });
+    }
+
+    // Apply price range filter
     if (priceRanges.length > 0) {
-      filtered = filtered.filter(ride => {
-        const price = ride.price_per_seat;
-        return priceRanges.some(range => {
-          switch (range) {
-            case 'budget': return price < 500;
-            case 'mid': return price >= 500 && price <= 1000;
-            case 'premium': return price > 1000 && price <= 2000;
-            case 'luxury': return price > 2000;
-            default: return true;
-          }
+      filteredRides = filteredRides.filter((ride) => {
+        return priceRanges.some((range) => {
+          const [min, max] = range.split("-").map(Number);
+          return ride.price_per_seat >= min && ride.price_per_seat <= max;
         });
       });
     }
 
     // Apply sorting
-    filtered.sort((a, b) => {
-      switch (sortBy) {
-        case 'relevance':
-          return b.confidence_score - a.confidence_score;
-        case 'earliest':
-          return new Date(a.departure_time).getTime() - new Date(b.departure_time).getTime();
-        case 'latest':
-          return new Date(b.departure_time).getTime() - new Date(a.departure_time).getTime();
-        case 'cheapest':
-          return a.price_per_seat - b.price_per_seat;
-        case 'closest':
-          const aTotalDist = (a.total_distance_km || 999);
-          const bTotalDist = (b.total_distance_km || 999);
-          return aTotalDist - bTotalDist;
-        case 'fastest':
-          // Calculate duration in hours
-          const aDuration = (new Date(a.arrival_time).getTime() - new Date(a.departure_time).getTime()) / (1000 * 60 * 60);
-          const bDuration = (new Date(b.arrival_time).getTime() - new Date(b.departure_time).getTime()) / (1000 * 60 * 60);
-          return aDuration - bDuration;
-        default:
-          return 0;
-      }
-    });
+    switch (sortBy) {
+      case "price-low":
+        filteredRides.sort((a, b) => a.price_per_seat - b.price_per_seat);
+        break;
+      case "price-high":
+        filteredRides.sort((a, b) => b.price_per_seat - a.price_per_seat);
+        break;
+      case "time":
+        filteredRides.sort(
+          (a, b) =>
+            new Date(a.departure_time).getTime() -
+            new Date(b.departure_time).getTime()
+        );
+        break;
+      case "relevance":
+      default:
+        // Sort by match percentage (already sorted by backend, but ensure it's maintained)
+        filteredRides.sort((a, b) => b.match_percentage - a.match_percentage);
+        break;
+    }
 
-    return filtered;
+    return filteredRides;
   };
 
   const displayRides = applyFiltersAndSort(searchResults);
 
   const handleBookRide = (rideId: string, driverId: string) => {
-    // Prevent drivers from booking their own rides
-    if (user?.uid === driverId) {
-      toast.error('You cannot book your own ride');
+    if (!user) {
+      toast.error("Please login to book a ride");
       return;
     }
-    
-    // Store current filter state before navigation
-    const currentState = {
-      searchResults,
-      searchMetadata,
-      availableVehicleTypes,
-      filters: { sortBy, departureTime, vehicleTypes, priceRanges },
-      hasSearched
-    };
-    sessionStorage.setItem('bookPageState', JSON.stringify(currentState));
-    
-    // Navigate to the booking details page
+
+    if (user.uid === driverId) {
+      toast.error("You cannot book your own ride");
+      return;
+    }
+
     router.push(`/book/${rideId}`);
   };
 
   const formatTime = (dateString: string) => {
-    return new Date(dateString).toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false
+    return new Date(dateString).toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
     });
   };
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen flex flex-col bg-white">
+    <div className="min-h-screen bg-white">
       <Navbar />
-      <main>
-        <div className="flex flex-col items-center justify-center w-full">
-          <section className="w-full max-w-6xl">
-            <div className="container mx-auto p-4">
-              <h1 className="text-2xl md:text-3xl font-bold mb-4 text-center">Book a Ride</h1>
-              <p className="mb-4 text-center">Select your pickup and drop-off locations, choose a vehicle, and book your ride.</p>
-              
-              <SearchBar onSearch={handleSearch} />
-            </div>
-          </section>
 
-          {/* Search Results Section */}
-          <div className="w-full max-w-7xl mx-auto px-2 sm:px-4 mt-4 sm:mt-8">
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 lg:gap-6">
-              {/* Filters Sidebar */}
-              <div className="lg:col-span-1 order-2 lg:order-1">
-                <div className="bg-white p-3 sm:p-6 rounded-lg shadow-sm border">
-                  <div className="flex items-center justify-between mb-3 sm:mb-4">
-                    <h3 className="text-base sm:text-lg font-semibold">Filters</h3>
-                    <button 
-                      onClick={clearAllFilters}
-                      className="text-blue-500 text-xs sm:text-sm hover:underline"
+      <main className="pt-8 pb-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Page Heading */}
+          <div className="text-center mb-8">
+            <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
+              Find Your Perfect Ride
+            </h1>
+            <p className="text-md text-gray-600 max-w-2xl mx-auto">
+              Search for rides from drivers across India.
+            </p>
+          </div>
+
+          {/* Alert for Better Results */}
+          {!hasSearched && (
+            <div className="mb-6">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <svg
+                      className="h-5 w-5 text-blue-400"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
                     >
-                      Clear all
-                    </button>
+                      <path
+                        fillRule="evenodd"
+                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
                   </div>
-
-                  {/* Sort By */}
-                  <div className="mb-4 sm:mb-6">
-                    <h4 className="font-medium mb-2 sm:mb-3 text-sm sm:text-base">Sort by</h4>
-                    <div className="space-y-1 sm:space-y-2">
-                      {[
-                        { value: 'relevance', label: 'Best Match' },
-                        { value: 'earliest', label: 'Earliest Departure' },
-                        { value: 'cheapest', label: 'Lowest Price' },
-                        { value: 'closest', label: 'Closest Distance' },
-                        { value: 'fastest', label: 'Shortest Duration' },
-                        { value: 'latest', label: 'Latest Departure' }
-                      ].map(option => (
-                        <label key={option.value} className="flex items-center space-x-2">
-                          <input 
-                            type="radio" 
-                            name="sortBy" 
-                            value={option.value}
-                            checked={sortBy === option.value}
-                            onChange={(e) => setSortBy(e.target.value)}
-                            className="text-blue-500"
-                          />
-                          <span className="text-xs sm:text-sm">{option.label}</span>
-                        </label>
-                      ))}
+                  <div className="ml-3">
+                    <h3 className="text-sm font-medium text-blue-800">
+                      💡 Pro Tip for Better Results
+                    </h3>
+                    <div className="mt-2 text-sm text-blue-700">
+                      <p>
+                        Use <strong>states and cities</strong> for more accurate
+                        matches. For example:
+                      </p>
+                      <ul className="mt-1 list-disc list-inside space-y-1">
+                        <li>"Delhi, India" instead of just "Delhi"</li>
+                        <li>
+                          "Mumbai, Maharashtra, India" for better precision
+                        </li>
+                        <li>"Bangalore, Karnataka, India" for exact matches</li>
+                      </ul>
                     </div>
                   </div>
-
-                  {/* Departure Time */}
-                  <div className="mb-4 sm:mb-6">
-                    <h4 className="font-medium mb-2 sm:mb-3 text-sm sm:text-base">Departure time</h4>
-                    <div className="space-y-1 sm:space-y-2">
-                      {[
-                        { value: 'early-morning', label: '4:00 - 8:00 AM' },
-                        { value: 'morning', label: '8:00 AM - 12:00 PM' },
-                        { value: 'afternoon', label: '12:00 - 4:00 PM' },
-                        { value: 'evening', label: '4:00 - 8:00 PM' },
-                        { value: 'night', label: '8:00 PM - 4:00 AM' }
-                      ].map(time => (
-                        <label key={time.value} className="flex items-center space-x-2">
-                          <input 
-                            type="checkbox" 
-                            checked={departureTime.includes(time.value)}
-                            onChange={() => handleTimeFilter(time.value)}
-                            className="text-blue-500"
-                          />
-                          <span className="text-xs sm:text-sm">{time.label}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Price Range Filter */}
-                  <div className="mb-4 sm:mb-6">
-                    <h4 className="font-medium mb-2 sm:mb-3 text-sm sm:text-base">Price Range</h4>
-                    <div className="space-y-1 sm:space-y-2">
-                      {[
-                        { value: 'budget', label: 'Under ₹500', range: [0, 500] },
-                        { value: 'mid', label: '₹500 - ₹1000', range: [500, 1000] },
-                        { value: 'premium', label: '₹1000 - ₹2000', range: [1000, 2000] },
-                        { value: 'luxury', label: 'Above ₹2000', range: [2000, 99999] }
-                      ].map(price => (
-                        <label key={price.value} className="flex items-center space-x-2">
-                          <input 
-                            type="checkbox" 
-                            checked={priceRanges.includes(price.value)}
-                            onChange={() => handlePriceFilter(price.value)}
-                            className="text-blue-500"
-                          />
-                          <span className="text-xs sm:text-sm">{price.label}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Vehicle Types */}
-                  {availableVehicleTypes.length > 0 && (
-                    <div className="mb-4 sm:mb-6">
-                      <h4 className="font-medium mb-2 sm:mb-3 text-sm sm:text-base">Vehicle Types</h4>
-                      <div className="space-y-1 sm:space-y-2">
-                        {availableVehicleTypes.map((vehicleType) => (
-                          <label key={vehicleType} className="flex items-center space-x-2">
-                            <input 
-                              type="checkbox" 
-                              checked={vehicleTypes.includes(vehicleType)}
-                              onChange={() => handleVehicleTypeFilter(vehicleType)}
-                              className="text-blue-500"
-                            />
-                            <Car className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400" />
-                            <span className="text-xs sm:text-sm capitalize">{vehicleType}</span>
-                            <span className="text-xs text-gray-500 ml-auto">
-                              ({searchResults.filter(r => r.vehicle_type === vehicleType).length})
-                            </span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  )}
                 </div>
               </div>
+            </div>
+          )}
 
-              {/* Results Area */}
-              <div className="lg:col-span-3 order-1 lg:order-2">
-                {/* Loading State */}
-                {loading && (
-                  <div className="text-center py-8 sm:py-12">
-                    <div className="animate-spin rounded-full h-8 w-8 sm:h-12 sm:w-12 border-b-2 border-blue-500 mx-auto"></div>
-                    <p className="mt-3 sm:mt-4 text-gray-600 text-sm sm:text-base">Searching for rides...</p>
+          {/* Search Bar - Centered and moved to left */}
+          <div className="mb-8">
+            <div className="max-w-4xl mx-auto">
+              <SearchBar onSearch={handleSearch} />
+            </div>
+            <p className="text-xs text-[#4AAAFF] mt-4 text-center">
+              For better and broader results, use states in the origin and
+              destination fields.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            {/* Mobile Filters Button */}
+            <div className="lg:hidden">
+              <button
+                onClick={() => setShowMobileFilters(!showMobileFilters)}
+                className="w-full bg-white p-3 flex items-center justify-between"
+              >
+                <span className="font-medium text-gray-700">
+                  Filters & Sort
+                </span>
+                <svg
+                  className={`w-5 h-5 text-gray-400 transition-transform ${showMobileFilters ? "rotate-180" : ""}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 9l-7 7-7-7"
+                  />
+                </svg>
+              </button>
+            </div>
+
+            {/* Filters Sidebar - Desktop and Mobile Dropdown */}
+            <div
+              className={`lg:col-span-1 ${showMobileFilters ? "block" : "hidden"} lg:block`}
+            >
+              <div className="bg-white rounded-lg shadow-sm p-4 space-y-6">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold">Filters</h3>
+                  <button
+                    onClick={clearAllFilters}
+                    className="text-sm text-blue-600 hover:text-blue-800"
+                  >
+                    Clear All
+                  </button>
+                </div>
+
+                {/* Sort By */}
+                <div>
+                  <h4 className="font-medium mb-3">Sort By</h4>
+                  <div className="space-y-2">
+                    {[
+                      { value: "relevance", label: "Best Match" },
+                      { value: "price-low", label: "Price: Low to High" },
+                      { value: "price-high", label: "Price: High to Low" },
+                      { value: "time", label: "Departure Time" },
+                    ].map((option) => (
+                      <label key={option.value} className="flex items-center">
+                        <input
+                          type="radio"
+                          name="sortBy"
+                          value={option.value}
+                          checked={sortBy === option.value}
+                          onChange={(e) => setSortBy(e.target.value)}
+                          className="mr-2"
+                        />
+                        <span className="text-sm">{option.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Vehicle Types */}
+                {availableVehicleTypes.length > 0 && (
+                  <div>
+                    <h4 className="font-medium mb-3">Vehicle Type</h4>
+                    <div className="space-y-2">
+                      {availableVehicleTypes.map((type) => (
+                        <label key={type} className="flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={vehicleTypes.includes(type)}
+                            onChange={() => handleVehicleTypeFilter(type)}
+                            className="mr-2"
+                          />
+                          <span className="text-sm capitalize">{type}</span>
+                        </label>
+                      ))}
+                    </div>
                   </div>
                 )}
 
-                {/* Enhanced Search Results Header */}
+                {/* Departure Time */}
+                <div>
+                  <h4 className="font-medium mb-3">Departure Time</h4>
+                  <div className="space-y-2">
+                    {[
+                      { value: "6-12", label: "Morning (6 AM - 12 PM)" },
+                      { value: "12-18", label: "Afternoon (12 PM - 6 PM)" },
+                      { value: "18-24", label: "Evening (6 PM - 12 AM)" },
+                      { value: "0-6", label: "Night (12 AM - 6 AM)" },
+                    ].map((time) => (
+                      <label key={time.value} className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={departureTime.includes(time.value)}
+                          onChange={() => handleTimeFilter(time.value)}
+                          className="mr-2"
+                        />
+                        <span className="text-sm">{time.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Price Range */}
+                <div>
+                  <h4 className="font-medium mb-3">Price Range</h4>
+                  <div className="space-y-2">
+                    {[
+                      { value: "0-500", label: "Under ₹500" },
+                      { value: "500-1000", label: "₹500 - ₹1000" },
+                      { value: "1000-2000", label: "₹1000 - ₹2000" },
+                      { value: "2000-5000", label: "₹2000 - ₹5000" },
+                      { value: "5000-999999", label: "Above ₹5000" },
+                    ].map((range) => (
+                      <label key={range.value} className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={priceRanges.includes(range.value)}
+                          onChange={() => handlePriceFilter(range.value)}
+                          className="mr-2"
+                        />
+                        <span className="text-sm">{range.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Mobile: Apply Filters Button */}
+                <div className="lg:hidden pt-4 border-t border-gray-200">
+                  <button
+                    onClick={() => setShowMobileFilters(false)}
+                    className="w-full bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors"
+                  >
+                    Apply Filters
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Search Results */}
+            <div className="lg:col-span-3">
+              <div className="space-y-4">
+                {/* Loading State */}
+                {loading && (
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+                    <p className="mt-4 text-gray-600">Searching for rides...</p>
+                  </div>
+                )}
+
+                {/* Error State */}
+                {searchError && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <p className="text-red-800">{searchError}</p>
+                  </div>
+                )}
+
                 {!loading && hasSearched && searchMetadata && (
-                  <div className="mb-4 sm:mb-6 p-3 sm:p-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-3 sm:mb-4">
-                      <div className="mb-3 sm:mb-0">
-                        <h3 className="text-lg sm:text-xl font-bold text-blue-900 mb-1 sm:mb-2">
-                          {displayRides.length} rides found
-                        </h3>
-                        <p className="text-xs sm:text-sm text-blue-700 mb-1 sm:mb-2">
-                          Search completed in {searchMetadata.searchTime} using priority-based matching
-                        </p>
-                        {searchMetadata.dateRange && (
-                          <p className="text-xs text-blue-600">
-                            📅 {searchMetadata.dateRange}
-                          </p>
-                        )}
+                  <div className="bg-white px-4 py-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center space-x-2 text-xs sm:text-sm text-gray-600 font-medium">
+                        <span>{searchOrigin || "Origin"}</span>
+                        <svg
+                          className="w-3.5 h-3.5 text-gray-400"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M17 8l4 4m0 0l-4 4m4-4H3"
+                          />
+                        </svg>
+                        <span>{searchDestination || "Destination"}</span>
                       </div>
-                      <div className="text-left sm:text-right">
-                        <div className="text-xs text-blue-600 mb-1 sm:mb-2">Radius: {searchMetadata.searchRadius}km</div>
-                        <div className="text-xs text-blue-700">
-                          <div className="font-semibold">Priority Order:</div>
-                          <div>1. Location (coordinates)</div>
-                          <div>2. Date (±3 days)</div>
-                          <div>3. Vehicle (flexible)</div>
-                        </div>
+                      <div className="text-xs sm:text-sm font-semibold text-gray-800">
+                        {searchMetadata.totalFound} ride
+                        {searchMetadata.totalFound !== 1 ? "s" : ""} available
                       </div>
                     </div>
-                    
-                    {/* Priority Distribution */}
-                    {searchMetadata.priorityDistribution && (
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4 text-xs">
-                        <div className="bg-white bg-opacity-60 p-2 sm:p-3 rounded-lg">
-                          <div className="font-semibold text-blue-800 mb-1">📍 Location</div>
-                          <div className="space-y-1">
-                            {searchMetadata.priorityDistribution.location_priority_1 > 0 && (
-                              <div className="flex items-center space-x-1">
-                                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                                <span>{searchMetadata.priorityDistribution.location_priority_1} direct</span>
-                              </div>
-                            )}
-                            {searchMetadata.priorityDistribution.location_priority_2 > 0 && (
-                              <div className="flex items-center space-x-1">
-                                <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                                <span>{searchMetadata.priorityDistribution.location_priority_2} route</span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        
-                        <div className="bg-white bg-opacity-60 p-2 sm:p-3 rounded-lg">
-                          <div className="font-semibold text-blue-800 mb-1">📅 Date</div>
-                          <div className="space-y-1">
-                            {searchMetadata.priorityDistribution.date_exact_match > 0 && (
-                              <div className="flex items-center space-x-1">
-                                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                                <span>{searchMetadata.priorityDistribution.date_exact_match} exact</span>
-                              </div>
-                            )}
-                            <div className="flex items-center space-x-1">
-                              <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                              <span>{searchMetadata.priorityDistribution.date_within_range} ±3 days</span>
-                            </div>
-                          </div>
-                        </div>
-                        
-                        <div className="bg-white bg-opacity-60 p-2 sm:p-3 rounded-lg">
-                          <div className="font-semibold text-blue-800 mb-1">🚗 Vehicle</div>
-                          <div className="space-y-1">
-                            {searchMetadata.priorityDistribution.vehicle_preferred > 0 && (
-                              <div className="flex items-center space-x-1">
-                                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                                <span>{searchMetadata.priorityDistribution.vehicle_preferred} preferred</span>
-                              </div>
-                            )}
-                            <div className="flex items-center space-x-1">
-                              <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
-                              <span>All vehicle types shown</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 )}
 
@@ -526,151 +551,172 @@ function BookRide() {
                 {!loading && hasSearched && !searchMetadata && (
                   <div className="mb-4">
                     <h2 className="text-xl font-semibold">
-                      {displayRides.length > 0 
-                        ? `${displayRides.length} ride${displayRides.length !== 1 ? 's' : ''} found`
-                        : 'No rides found'
-                      }
+                      {displayRides.length > 0
+                        ? `${displayRides.length} ride${displayRides.length !== 1 ? "s" : ""} found`
+                        : "No rides found"}
                     </h2>
                   </div>
                 )}
 
                 {/* Rides List */}
                 {!loading && displayRides.length > 0 && (
-                  <div className="space-y-3 sm:space-y-4">
-                    {displayRides.map((ride) => {
-                      const rideMatch = ride as RideMatch;
-                      const hasMatchData = rideMatch.confidence_score !== undefined;
-                      
-                      // Priority indicator calculations based on available fields
-                      const getLocationMatch = () => {
-                        if (!hasMatchData) return null;
-                        if (rideMatch.match_type === 'direct') return { color: 'green', text: 'Direct route match' };
-                        if (rideMatch.match_type === 'intermediate') return { color: 'yellow', text: 'Intermediate stop' };
-                        return { color: 'gray', text: 'Nearby route' };
-                      };
-                      
+                  <div className="space-y-3">
+                    {displayRides.slice(0, displayedRidesCount).map((ride) => {
+                      // Match quality indicator based on match percentage
                       const getMatchQuality = () => {
-                        if (!hasMatchData) return null;
-                        if (rideMatch.confidence_score > 80) return { color: 'green', text: 'High confidence' };
-                        if (rideMatch.confidence_score > 60) return { color: 'yellow', text: 'Good match' };
-                        return { color: 'orange', text: 'Possible match' };
+                        if (ride.match_percentage >= 80)
+                          return "Excellent match";
+                        if (ride.match_percentage >= 60) return "Good match";
+                        return "Basic match";
                       };
 
-                      const locationMatch = getLocationMatch();
                       const matchQuality = getMatchQuality();
-                      
+
                       return (
-                        <div key={ride.ride_id} className={`bg-white rounded-lg shadow-sm border-l-4 p-3 sm:p-6 hover:shadow-md transition-shadow ${
-                          hasMatchData && rideMatch.confidence_score > 80 ? 'border-l-green-500' : 
-                          hasMatchData && rideMatch.confidence_score > 60 ? 'border-l-yellow-500' : 
-                          'border-l-gray-300'
-                        }`}>
-                          {/* Enhanced Match Info Header */}
-                          {hasMatchData && (
-                            <div className="mb-3 sm:mb-4 pb-2 sm:pb-3 border-b border-gray-100">
-                              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
-                                <div className="flex flex-wrap items-center gap-2 sm:space-x-3">
-                                  <span className={`text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-full font-medium ${
-                                    rideMatch.confidence_score > 80 ? 'bg-green-100 text-green-800' :
-                                    rideMatch.confidence_score > 60 ? 'bg-yellow-100 text-yellow-800' :
-                                    'bg-gray-100 text-gray-600'
-                                  }`}>
-                                    {Math.round(rideMatch.confidence_score)}% match
-                                  </span>
-                                  {rideMatch.origin_distance_km !== undefined && (
-                                    <span className="text-xs sm:text-sm px-2 sm:px-3 py-1 bg-blue-100 text-blue-800 rounded-full">
-                                      {rideMatch.origin_distance_km}km from origin
-                                    </span>
-                                  )}
-                                  {rideMatch.dest_distance_km !== undefined && (
-                                    <span className="text-xs sm:text-sm px-2 sm:px-3 py-1 bg-purple-100 text-purple-800 rounded-full">
-                                      {rideMatch.dest_distance_km}km to destination
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        
+                        <div
+                          key={ride.ride_id}
+                          className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md transition-shadow"
+                        >
                           <div className="flex flex-col space-y-4">
-                            {/* Time and Route - Mobile Stack */}
-                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
-                              <div className="flex items-center justify-between sm:space-x-4">
+                            {/* Time and Route Section */}
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
+                              <div className="flex items-center justify-center sm:justify-start space-x-4 flex-1">
                                 <div className="text-center">
-                                  <div className="text-base sm:text-lg font-semibold">{formatTime(ride.departure_time)}</div>
-                                  <div className="text-xs sm:text-sm text-gray-600">{ride.origin_state}</div>
-                                  {ride.origin_distance_km && (
-                                    <div className="text-xs text-blue-600">{ride.origin_distance_km}km away</div>
-                                  )}
+                                  <div className="text-lg font-semibold text-gray-900">
+                                    {formatTime(ride.departure_time)}
+                                  </div>
+                                  <div className="text-sm text-gray-600 mt-1">
+                                    {ride.origin_state}
+                                  </div>
                                 </div>
-                                <div className="flex items-center space-x-2 px-4">
-                                  <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
-                                  <div className="w-8 sm:w-16 h-px bg-gray-300"></div>
-                                  <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+
+                                <div className="flex items-center space-x-2 px-3">
+                                  <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+                                  <div className="w-16 h-px bg-gray-300"></div>
+                                  <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
                                 </div>
+
                                 <div className="text-center">
-                                  <div className="text-base sm:text-lg font-semibold">{formatTime(ride.arrival_time)}</div>
-                                  <div className="text-xs sm:text-sm text-gray-600">{ride.destination_state}</div>
-                                  {ride.dest_distance_km && (
-                                    <div className="text-xs text-blue-600">{ride.dest_distance_km}km away</div>
-                                  )}
+                                  <div className="text-lg font-semibold text-gray-900">
+                                    {formatTime(ride.arrival_time)}
+                                  </div>
+                                  <div className="text-sm text-gray-600 mt-1">
+                                    {ride.destination_state}
+                                  </div>
                                 </div>
                               </div>
 
-                              {/* Price and Book Button - Mobile */}
-                              <div className="flex items-center justify-between sm:flex-col sm:items-end sm:space-y-3">
-                                <div className="text-xl sm:text-2xl font-bold text-gray-900">₹{ride.price_per_seat}</div>
-                                {user?.uid === ride.driver_id ? (
-                                  <div className="text-center">
-                                    <button 
-                                      disabled
-                                      className="bg-gray-300 text-gray-500 px-4 sm:px-6 py-2 rounded-lg cursor-not-allowed text-xs sm:text-sm font-medium"
-                                      title="You cannot book your own ride"
-                                    >
-                                      Your Ride
-                                    </button>
-                                    <p className="text-xs text-gray-500 mt-1 hidden sm:block">This is your published ride</p>
-                                  </div>
-                                ) : (
-                                  <button 
-                                    onClick={() => handleBookRide(ride.ride_id, ride.driver_id)}
-                                    className="bg-blue-500 text-white px-4 sm:px-6 py-2 rounded-lg hover:bg-blue-600 transition-colors text-xs sm:text-sm font-medium"
-                                  >
-                                    Book Now
-                                  </button>
-                                )}
+                              {/* Price - Desktop only */}
+                              <div className="hidden sm:block text-right">
+                                <div className="text-2xl font-bold text-gray-900">
+                                  ₹{ride.price_per_seat}
+                                </div>
+                                <div className="text-sm text-gray-500">
+                                  per seat
+                                </div>
                               </div>
                             </div>
 
-                            {/* Driver Info - Mobile */}
-                            <div className="flex items-center space-x-3 pt-2 border-t border-gray-100">
-                              <Car className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400" />
-                              <div>
+                            {/* Driver and Vehicle Info Section */}
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0 bg-gray-50 rounded-lg p-3">
+                              <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-6">
+                                {/* Driver Info */}
                                 <div className="flex items-center space-x-2">
-                                  {ride.driver && (
-                                    <>
-                                      <div className="w-5 h-5 sm:w-6 sm:h-6 bg-gray-200 rounded-full flex items-center justify-center">
-                                        <User className="w-3 h-3 sm:w-4 sm:h-4 text-gray-600" />
-                                      </div>
-                                      <span className="text-xs sm:text-sm font-medium">{ride.driver.display_name}</span>
-                                    </>
-                                  )}
                                   
-                                  <div className="flex items-center space-x-1">
-                                    <span className="text-yellow-500 text-xs sm:text-sm">★</span>
-                                    <span className="text-xs sm:text-sm">{ride.driver?.rating || 'New'}</span>
+                                  <div>
+                                    <div className="text-sm font-medium text-gray-900">
+                                      {ride.driver?.display_name}
+                                    </div>
+                                    <div className="text-xs text-gray-500 capitalize">
+                                      {ride.vehicle_type}
+                                    </div>
                                   </div>
                                 </div>
-                                
-                                <div className="flex items-center space-x-2 mt-1">
-                                  <span className="text-xs text-gray-500 capitalize">{ride.vehicle_type}</span>
-                                  <span className="text-xs text-gray-500">•</span>
-                                  <span className="text-xs text-gray-500">{ride.seats_available} seats left</span>
-                                  {ride.match_type === 'intermediate' && (
-                                    <span className="text-xs text-yellow-600 font-medium">• Route Stop</span>
-                                  )}
+
+                                {/* Additional Info */}
+                                <div className="flex items-center space-x-4 text-sm text-gray-600">
+                                  {/* Stopovers */}
+                                  {ride.stopovers &&
+                                    ride.stopovers.length > 0 && (
+                                      <div className="flex items-center space-x-1">
+                                        <div className="w-2 h-2 bg-orange-400 rounded-full"></div>
+                                        <span className="text-xs">
+                                          {ride.stopovers.length} stopover
+                                          {ride.stopovers.length !== 1
+                                            ? "s"
+                                            : ""}
+                                        </span>
+                                      </div>
+                                    )}
+
+                                  {/* Seats Available */}
+                                  <div className="flex items-center space-x-1">
+                                    <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                                    <span className="text-xs">
+                                      {ride.seats_available} seats left
+                                    </span>
+                                  </div>
                                 </div>
                               </div>
+
+                              {/* Match Quality */}
+                              <div className="flex justify-start sm:justify-end">
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                  {matchQuality}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Price and Book Button Section - Mobile */}
+                            <div className="flex sm:hidden items-center justify-between pt-2 border-t border-gray-100">
+                              <div>
+                                <div className="text-xl font-bold text-gray-900">
+                                  ₹{ride.price_per_seat}
+                                </div>
+                                <div className="text-sm text-gray-500">
+                                  per seat
+                                </div>
+                              </div>
+                              {user?.uid === ride.driver_id ? (
+                                <button
+                                  disabled
+                                  className="bg-gray-300 text-gray-500 px-4 py-2 rounded-lg cursor-not-allowed text-sm font-medium"
+                                  title="You cannot book your own ride"
+                                >
+                                  Your Ride
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() =>
+                                    handleBookRide(ride.ride_id, ride.driver_id)
+                                  }
+                                  className="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
+                                >
+                                  Book Now
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Book Button - Desktop only */}
+                            <div className="hidden sm:flex justify-end">
+                              {user?.uid === ride.driver_id ? (
+                                <button
+                                  disabled
+                                  className="bg-gray-300 text-gray-500 px-6 py-2 rounded-lg cursor-not-allowed text-sm font-medium"
+                                  title="You cannot book your own ride"
+                                >
+                                  Your Ride
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() =>
+                                    handleBookRide(ride.ride_id, ride.driver_id)
+                                  }
+                                  className="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
+                                >
+                                  Book Now
+                                </button>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -679,11 +725,27 @@ function BookRide() {
                   </div>
                 )}
 
+                {/* Load More Button */}
+                {displayedRidesCount < searchResults.length && (
+                  <div className="text-center mt-6">
+                    <button
+                      onClick={handleLoadMore}
+                      className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition-colors text-lg font-semibold"
+                    >
+                      Load More Rides
+                    </button>
+                  </div>
+                )}
+
                 {/* No Results Message */}
                 {!loading && hasSearched && displayRides.length === 0 && (
                   <div className="text-center py-8 sm:py-12 bg-gray-50 rounded-lg">
-                    <p className="text-gray-600 text-base sm:text-lg">No rides found matching your criteria.</p>
-                    <p className="text-gray-500 text-sm mt-2">Try adjusting your search parameters or check back later.</p>
+                    <p className="text-gray-600 text-base sm:text-lg">
+                      No rides found matching your criteria.
+                    </p>
+                    <p className="text-gray-500 text-sm mt-2">
+                      Try adjusting your search parameters or check back later.
+                    </p>
                   </div>
                 )}
 
@@ -691,8 +753,12 @@ function BookRide() {
                 {!hasSearched && !loading && (
                   <div className="text-center py-8 sm:py-12 bg-gray-50 rounded-lg">
                     <Car className="w-12 h-12 sm:w-16 sm:h-16 text-gray-400 mx-auto mb-3 sm:mb-4" />
-                    <p className="text-gray-600 text-base sm:text-lg">Search for rides above</p>
-                    <p className="text-gray-500 text-sm mt-2">Enter your pickup and destination to find available rides</p>
+                    <p className="text-gray-600 text-base sm:text-lg">
+                      Search for rides above
+                    </p>
+                    <p className="text-gray-500 text-sm mt-2">
+                      Enter your pickup and destination to find available rides
+                    </p>
                   </div>
                 )}
               </div>
@@ -700,7 +766,7 @@ function BookRide() {
           </div>
         </div>
       </main>
-      
+
       <Footer />
     </div>
   );

@@ -113,45 +113,6 @@ export class ApiClient {
     });
   }
 
-  // Admin methods
-  async adminAuthenticate(adminKey: string) {
-    return this.request<{ message: string }>('/admin-service', {
-      method: 'POST',
-      body: JSON.stringify({ action: 'authenticate', adminKey }),
-    });
-  }
-
-  async getAdminStats(adminKey: string) {
-    return this.request<{
-      totalUsers: number;
-      totalDrivers: number;
-      verifiedUsers: number;
-      driversWithDocs: number;
-      verifiedDLs: number;
-      verifiedIDs: number;
-    }>('/admin-service', {
-      method: 'POST',
-      body: JSON.stringify({ action: 'getStats', adminKey }),
-    });
-  }
-
-  async getAllUsers(adminKey: string) {
-    return this.request<Array<{
-      userProfile: any;
-      driverProfile?: any;
-    }>>('/admin-service', {
-      method: 'POST',
-      body: JSON.stringify({ action: 'getUsers', adminKey }),
-    });
-  }
-
-  async updateUserVerification(adminKey: string, userId: string, documentType: 'id' | 'dl', verified: boolean) {
-    return this.request<{ message: string }>('/admin-service', {
-      method: 'POST',
-      body: JSON.stringify({ action: 'updateVerification', adminKey, userId, documentType, verified }),
-    });
-  }
-
   // Health check
   async healthCheck() {
     return this.request('/health');

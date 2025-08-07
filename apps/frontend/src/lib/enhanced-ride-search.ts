@@ -1,10 +1,10 @@
-// Enhanced API client for intelligent ride matching
+// Enhanced ride search client with intelligent location resolution and multiple search strategies
 import { searchAllIndianLocations } from './mapbox-search';
 
 export interface SearchLocation {
   name: string;
   fullAddress: string;
-  coordinates: [number, number]; // [lng, lat]
+  coordinates: [number, number];
   placeType: string[];
   category?: 'state' | 'city' | 'locality' | 'neighborhood';
 }
@@ -15,70 +15,46 @@ export interface EnhancedSearchCriteria {
   travelDate?: string;
   passengersNeeded: number;
   vehiclePreferences?: string[];
-  maxRadius?: number; // in meters
-  priceRange?: {
-    min: number;
-    max: number;
-  };
-  timePreference?: {
-    earliest?: string; // HH:MM format
-    latest?: string;   // HH:MM format
-  };
-}
-
-export interface RideMatch {
-  ride_id: string;
-  vehicle_type: string;
-  origin: string;
-  destination: string;
-  origin_state: string;
-  destination_state: string;
-  departure_time: string;
-  arrival_time: string;
-  seats_total: number;
-  seats_available: number;
-  price_per_seat: number;
-  status: string;
-  driver_id: string;
-  // Enhanced matching data
-  origin_distance_km?: number;
-  dest_distance_km?: number;
-  total_distance_km?: number;
-  route_match_score?: number;
-  is_intermediate_match?: boolean;
-  match_type: 'direct' | 'intermediate' | 'fuzzy';
-  confidence_score: number;
-  driver?: {
-    display_name: string;
-    first_name: string;
-    last_name: string;
-    profile_url: string | null;
-    rating?: number;
-    total_rides?: number;
-  };
+  maxRadius?: number;
+  priceRange?: { min: number; max: number };
+  timePreference?: { earliest?: string; latest?: string };
 }
 
 export interface SearchResponse {
   success: boolean;
   results: {
-    rides: RideMatch[];
+    rides: Array<{
+      ride_id: string;
+      vehicle_type: string;
+      origin: string;
+      destination: string;
+      origin_state: string;
+      destination_state: string;
+      departure_time: string;
+      arrival_time: string;
+      seats_total: number;
+      seats_available: number;
+      price_per_seat: number;
+      status: string;
+      created_at: string;
+      driver_id: string;
+      driver: {
+        display_name: string;
+        first_name: string;
+        last_name: string;
+        profile_picture_url: string | null;
+      };
+      match_percentage: number;
+      match_reason: string;
+      stopovers?: Array<{
+        landmark: string;
+        sequence: number;
+      }>;
+    }>;
     metadata: {
       totalFound: number;
-      searchStrategy: string;
-      searchTime: string;
-      searchRadius: number;
-      searchDate: string;
       passengersNeeded: number;
-      filters: {
-        vehicleTypes: string[] | string;
-        priceRange: { min: number; max: number } | string;
-        timePreference: { earliest?: string; latest?: string } | string;
-      };
-      qualityDistribution: {
-        direct: number;
-        intermediate: number;
-        fuzzy: number;
-      };
+      searchMethod: string;
     };
   };
 }
@@ -87,7 +63,7 @@ class EnhancedRideSearchClient {
   private baseUrl: string;
   private requestId: number = 0;
 
-  constructor(baseUrl: string = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001') {
+  constructor(baseUrl: string = '') {
     this.baseUrl = baseUrl;
   }
 
@@ -129,24 +105,52 @@ class EnhancedRideSearchClient {
   }
 
   /**
-   * Intelligent ride search with multiple strategies
+   * Intelligent ride search with custom location-based matching
    */
   async searchRides(criteria: EnhancedSearchCriteria): Promise<SearchResponse> {
     const requestId = ++this.requestId;
     const startTime = Date.now();
 
     try {
-      const response = await fetch(`${this.baseUrl}/api/rides/search-enhanced`, {
+      // Use the correct backend URL
+      const apiUrl = process.env.NODE_ENV === 'development' 
+        ? 'http://localhost:3001/api/rides/search'
+        : '/api/rides/search';
+
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(criteria)
+        body: JSON.stringify({
+          origin: {
+            location: criteria.origin.fullAddress
+          },
+          destination: {
+            location: criteria.destination.fullAddress
+          },
+          passengersNeeded: criteria.passengersNeeded
+        })
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+        const errorText = await response.text();
+        console.error('API Error Response:', errorText);
+        
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error || errorData.details || errorMessage;
+        } catch (e) {
+          // If response is not JSON, use the text as error message
+          if (errorText.includes('<!DOCTYPE')) {
+            errorMessage = 'Backend server error - please check if the backend is running';
+          } else {
+            errorMessage = errorText;
+          }
+        }
+        
+        throw new Error(errorMessage);
       }
 
       const result: SearchResponse = await response.json();
@@ -168,148 +172,82 @@ class EnhancedRideSearchClient {
   async smartSearch(
     originInput: string,
     destinationInput: string,
-    options: {
-      travelDate?: string;
-      passengersNeeded: number;
-      vehiclePreferences?: string[];
-      maxRadius?: number;
-      priceRange?: { min: number; max: number };
-      timePreference?: { earliest?: string; latest?: string };
-    }
+    passengersNeeded: number = 1
   ): Promise<SearchResponse> {
-    // Resolve locations in parallel
-    const [originLocation, destinationLocation] = await Promise.all([
-      this.resolveLocation(originInput),
-      this.resolveLocation(destinationInput)
-    ]);
-
-    if (!originLocation || !destinationLocation) {
-      throw new Error('Failed to resolve origin or destination location');
-    }
-
-    // Build enhanced search criteria
-    const criteria: EnhancedSearchCriteria = {
-      origin: originLocation,
-      destination: destinationLocation,
-      travelDate: options.travelDate,
-      passengersNeeded: options.passengersNeeded,
-      vehiclePreferences: options.vehiclePreferences,
-      maxRadius: options.maxRadius || 30000, // 30km default
-      priceRange: options.priceRange,
-      timePreference: options.timePreference
-    };
-
-    return this.searchRides(criteria);
-  }
-
-  /**
-   * Get search suggestions based on partial input
-   */
-  async getLocationSuggestions(query: string, limit: number = 8): Promise<SearchLocation[]> {
-    if (!query || query.trim().length < 2) {
-      return [];
-    }
+    const requestId = ++this.requestId;
+    const startTime = Date.now();
 
     try {
-      const suggestions = await searchAllIndianLocations(query.trim());
-      return suggestions.slice(0, limit);
-    } catch (error) {
-      console.error('Failed to get location suggestions:', error);
-      return [];
-    }
-  }
+      // Use the correct backend URL
+      const apiUrl = process.env.NODE_ENV === 'development' 
+        ? 'http://localhost:3001/api/rides/search'
+        : '/api/rides/search';
 
-  /**
-   * Calculate estimated travel distance between two locations
-   */
-  async getDistanceEstimate(origin: SearchLocation, destination: SearchLocation): Promise<number | null> {
-    if (!origin.coordinates || !destination.coordinates ||
-        origin.coordinates[0] === 0 || destination.coordinates[0] === 0) {
-      return null;
-    }
+      console.log('🔍 Making API call to:', apiUrl);
+      console.log('📤 Request payload:', {
+        origin: { location: originInput },
+        destination: { location: destinationInput },
+        passengersNeeded
+      });
 
-    try {
-      // Simple haversine distance calculation
-      const [lon1, lat1] = origin.coordinates;
-      const [lon2, lat2] = destination.coordinates;
-      
-      const R = 6371; // Earth's radius in kilometers
-      const dLat = (lat2 - lat1) * Math.PI / 180;
-      const dLon = (lon2 - lon1) * Math.PI / 180;
-      
-      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                Math.sin(dLon/2) * Math.sin(dLon/2);
-      
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-      const distance = R * c;
-      
-      return Math.round(distance * 10) / 10; // Round to 1 decimal place
-    } catch (error) {
-      console.error('Distance calculation failed:', error);
-      return null;
-    }
-  }
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          origin: {
+            location: originInput
+          },
+          destination: {
+            location: destinationInput
+          },
+          passengersNeeded: passengersNeeded
+        })
+      });
 
-  /**
-   * Get ride recommendations based on user preferences and history
-   */
-  async getRecommendations(
-    userPreferences: {
-      preferredVehicleTypes?: string[];
-      preferredPriceRange?: { min: number; max: number };
-      preferredTimeRange?: { earliest: string; latest: string };
-      frequentRoutes?: Array<{ origin: string; destination: string }>;
-    }
-  ): Promise<RideMatch[]> {
-    // This could be enhanced with ML-based recommendations
-    // For now, return popular routes based on user preferences
-    
-    if (!userPreferences.frequentRoutes || userPreferences.frequentRoutes.length === 0) {
-      return [];
-    }
-
-    try {
-      // Search for rides on frequent routes
-      const recommendations: RideMatch[] = [];
-      
-      for (const route of userPreferences.frequentRoutes.slice(0, 3)) { // Limit to 3 routes
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('API Error Response:', errorText);
+        
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
         try {
-          const result = await this.smartSearch(
-            route.origin,
-            route.destination,
-            {
-              passengersNeeded: 1,
-              vehiclePreferences: userPreferences.preferredVehicleTypes,
-              priceRange: userPreferences.preferredPriceRange,
-              timePreference: userPreferences.preferredTimeRange
-            }
-          );
-          
-          recommendations.push(...result.results.rides.slice(0, 2)); // Top 2 per route
-        } catch (error) {
-          console.warn(`Failed to get recommendations for route ${route.origin} -> ${route.destination}:`, error);
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error || errorData.details || errorMessage;
+        } catch (e) {
+          // If response is not JSON, use the text as error message
+          if (errorText.includes('<!DOCTYPE')) {
+            errorMessage = 'Backend server error - please check if the backend is running';
+          } else {
+            errorMessage = errorText;
+          }
         }
+        
+        throw new Error(errorMessage);
       }
 
-      return recommendations.slice(0, 6); // Return top 6 recommendations
+      const result: SearchResponse = await response.json();
+      const searchTime = Date.now() - startTime;
+
+      console.log(`✅ [${requestId}] Search completed in ${searchTime}ms:`, result);
+
+      return result;
+
     } catch (error) {
-      console.error('Failed to get recommendations:', error);
-      return [];
+      const searchTime = Date.now() - startTime;
+      console.error(`❌ [${requestId}] Search failed after ${searchTime}ms:`, error);
+      
+      throw new Error(`Search failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 }
 
-// Create and export a singleton instance
-export const enhancedRideSearchClient = new EnhancedRideSearchClient();
+// Create a singleton instance
+const enhancedRideSearchClient = new EnhancedRideSearchClient();
 
-// Export helper functions
-export const resolveLocation = (input: string) => enhancedRideSearchClient.resolveLocation(input);
-export const smartSearchRides = (origin: string, destination: string, options: any) => 
-  enhancedRideSearchClient.smartSearch(origin, destination, options);
-export const getLocationSuggestions = (query: string, limit?: number) => 
-  enhancedRideSearchClient.getLocationSuggestions(query, limit);
-export const getDistanceEstimate = (origin: SearchLocation, destination: SearchLocation) =>
-  enhancedRideSearchClient.getDistanceEstimate(origin, destination);
+// Export the singleton instance and helper functions
+export { enhancedRideSearchClient };
 
-export default enhancedRideSearchClient;
+// Convenience function for smart search
+export const smartSearchRides = (origin: string, destination: string, passengersNeeded: number = 1) => 
+  enhancedRideSearchClient.smartSearch(origin, destination, passengersNeeded);

@@ -6,6 +6,41 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+interface ParsedLocation {
+  state: string;
+  city_or_region: string;
+  locality_or_landmark: string;
+}
+
+interface RideMatch {
+  ride_id: string;
+  vehicle_type: string;
+  origin: string;
+  destination: string;
+  origin_state: string;
+  destination_state: string;
+  departure_time: string;
+  arrival_time: string;
+  seats_total: number;
+  seats_available: number;
+  price_per_seat: number;
+  status: string;
+  created_at: string;
+  driver_id: string;
+  driver: {
+    display_name: string;
+    first_name: string;
+    last_name: string;
+    profile_picture_url: string | null;
+  };
+  match_percentage: number;
+  match_reason: string;
+  stopovers?: Array<{
+    landmark: string;
+    sequence: number;
+  }>;
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Add CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -22,84 +57,41 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    console.log('📥 Raw request body:', req.body);
-    
     const {
       origin,
       destination,
-      travelDate,
-      passengersNeeded,
-      vehiclePreferences,
-      maxRadius = 30000 // 30km default radius for PostGIS search
+      passengersNeeded
     } = req.body;
 
-    console.log('🌍 PostGIS Ride search request:', {
+    console.log('🔍 Custom Ride Search Request:', {
       origin: origin?.location,
       destination: destination?.location,
-      coordinates: {
-        origin: origin?.coordinates,
-        destination: destination?.coordinates
-      },
-      travelDate,
-      passengersNeeded,
-      maxRadius: `${maxRadius/1000}km`
+      passengersNeeded
     });
 
     // Validate required fields
     if (!origin?.location || !destination?.location || !passengersNeeded) {
-      console.log('❌ Validation failed:', {
-        hasOriginLocation: !!origin?.location,
-        hasDestinationLocation: !!destination?.location,
-        hasPassengersNeeded: !!passengersNeeded,
-        origin,
-        destination,
-        passengersNeeded
-      });
       return res.status(400).json({
         error: 'Missing required fields',
-        details: 'Origin, destination, and passengers needed are required',
-        received: {
-          origin: origin?.location || 'missing',
-          destination: destination?.location || 'missing',
-          passengersNeeded: passengersNeeded || 'missing'
-        }
+        details: 'Origin, destination, and passengers needed are required'
       });
     }
 
-    let filteredRides = [];
+    // Parse Mapbox query format: "Locality, City, State, Country"
+    const parsedOrigin = parseMapboxQuery(origin.location);
+    const parsedDestination = parseMapboxQuery(destination.location);
 
-    // Try PostGIS geographic search first if coordinates are available
-    if (origin.coordinates && destination.coordinates) {
-      const [originLng, originLat] = origin.coordinates;
-      const [destLng, destLat] = destination.coordinates;
-      
-      console.log('🎯 Using PostGIS geographic search with 30km radius');
+    console.log('📍 Parsed locations:', {
+      origin: parsedOrigin,
+      destination: parsedDestination
+    });
 
-      // Calculate date range: ±7 days from selected date for flexible searching
-      let startDate, endDate;
-      if (travelDate) {
-        const selectedDate = new Date(travelDate);
-        const startDateObj = new Date(selectedDate);
-        startDateObj.setDate(selectedDate.getDate() - 7); // 7 days before
-        const endDateObj = new Date(selectedDate);
-        endDateObj.setDate(selectedDate.getDate() + 7); // 7 days after
-        
-        startDate = startDateObj.toISOString().split('T')[0];
-        endDate = endDateObj.toISOString().split('T')[0];
-        
-        console.log(`📅 Searching rides from ${startDate} to ${endDate} (±7 days from ${travelDate})`);
-        console.log(`🔍 Date range filter: ${startDate}T00:00:00Z to ${endDate}T23:59:59Z`);
-      }
-
-      // Query rides with PostGIS data and enhanced driver details
-      const { data: postgisRides, error: postgisError } = await supabase
+    // Fetch all open rides with driver information and stopovers
+    const { data: rides, error: ridesError } = await supabase
         .from('rides')
         .select(`
           ride_id,
           vehicle_type,
-          vehicle_number,
-          vehicle_model,
-          vehicle_color,
           origin,
           destination,
           origin_state,
@@ -111,256 +103,105 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           price_per_seat,
           status,
           created_at,
-          driver_id,
-          origin_geog,
-          destination_geog,
-          pickup_points,
-          drop_points,
-          amenities,
-          driver_notes,
-          total_distance,
-          estimated_duration,
-          drivers!inner (
-            user_id,
-            first_name,
-            last_name,
-            display_name,
-            profile_picture_url,
-            phone_number,
-            rating,
-            total_rides,
-            vehicle_registration_number
-          )
+        driver_id
         `)
         .eq('status', 'open')
-        .gte('seats_available', passengersNeeded)
-        .not('origin_geog', 'is', null)
-        .not('destination_geog', 'is', null)
-        .gte('departure_time', startDate ? `${startDate}T00:00:00Z` : '1900-01-01')
-        .lte('departure_time', endDate ? `${endDate}T23:59:59Z` : '2100-12-31');
+      .gte('seats_available', passengersNeeded);
 
-      if (!postgisError && postgisRides) {
-        console.log(`🔍 Found ${postgisRides.length} rides with PostGIS data, filtering by radius...`);
-        
-        // Use PostGIS ST_DWithin to filter rides within radius
-        for (const ride of postgisRides) {
+    if (ridesError) {
+      console.error('❌ Error fetching rides:', ridesError);
+      return res.status(500).json({
+        error: 'Failed to fetch rides',
+        details: ridesError.message
+      });
+    }
+
+    console.log(`🔍 Found ${rides?.length || 0} potential rides, applying location matching...`);
+
+    // Get ride IDs to fetch stopovers
+    const rideIds = rides?.map(ride => ride.ride_id) || [];
+    let stopovers: any[] = [];
+    
+    if (rideIds.length > 0) {
+      const { data: rideStops, error: stopsError } = await supabase
+        .from('ride_stops')
+        .select('*')
+        .in('ride_id', rideIds)
+        .order('sequence');
+
+      if (!stopsError) {
+        stopovers = rideStops || [];
+        console.log(`📍 Found ${stopovers.length} stopovers for matching`);
+      }
+    }
+
+    // Group stopovers by ride_id for easy lookup
+    const stopoversByRide = stopovers.reduce((acc: any, stop: any) => {
+      if (!acc[stop.ride_id]) {
+        acc[stop.ride_id] = [];
+      }
+      acc[stop.ride_id].push(stop);
+      return acc;
+    }, {});
+
+    // Apply location-based matching logic
+    const matchedRides: RideMatch[] = [];
+
+    for (const ride of rides || []) {
+      const rideStopovers = stopoversByRide[ride.ride_id] || [];
+      
+      const matchResult = calculateLocationMatch(
+        ride,
+        rideStopovers,
+        parsedOrigin,
+        parsedDestination
+      );
+
+      if (matchResult.match_percentage >= 45) {
+        // Get driver information from user_profiles table
+        let driverInfo = {
+          display_name: 'Driver',
+          first_name: '',
+          last_name: '',
+          profile_picture_url: null
+        };
+
+        if (ride.driver_id) {
           try {
-            // Check if ride origin is within radius of search origin
-            const { data: originWithinRadius } = await supabase
-              .rpc('st_dwithin', {
-                geog1: ride.origin_geog,
-                geog2: `SRID=4326;POINT(${originLng} ${originLat})`,
-                distance_meters: maxRadius
-              });
+            const { data: driver, error: driverError } = await supabase
+              .from('user_profiles')
+              .select('display_name, first_name, last_name, profile_url')
+              .eq('id', ride.driver_id)
+              .single();
 
-            // Check if ride destination is within radius of search destination  
-            const { data: destWithinRadius } = await supabase
-              .rpc('st_dwithin', {
-                geog1: ride.destination_geog,
-                geog2: `SRID=4326;POINT(${destLng} ${destLat})`,
-                distance_meters: maxRadius
-              });
-
-            if (originWithinRadius && destWithinRadius) {
-              // Calculate exact distances for display
-              const { data: originDistance } = await supabase
-                .rpc('st_distance', {
-                  geog1: ride.origin_geog,
-                  geog2: `SRID=4326;POINT(${originLng} ${originLat})`
-                });
-
-              const { data: destDistance } = await supabase
-                .rpc('st_distance', {
-                  geog1: ride.destination_geog,
-                  geog2: `SRID=4326;POINT(${destLng} ${destLat})`
-                });
-
-              const driverInfo = (ride as any).drivers?.[0] || {};
-              filteredRides.push({
-                ...ride,
-                distances: {
-                  origin_km: Math.round((originDistance || 0) / 1000 * 10) / 10,
-                  destination_km: Math.round((destDistance || 0) / 1000 * 10) / 10,
-                  total_km: Math.round(((originDistance || 0) + (destDistance || 0)) / 1000 * 10) / 10
-                },
-                driver: {
-                  user_id: driverInfo.user_id || ride.driver_id,
-                  display_name: driverInfo.display_name || `${driverInfo.first_name || ''} ${driverInfo.last_name || ''}`.trim() || 'Driver',
-                  first_name: driverInfo.first_name || '',
-                  last_name: driverInfo.last_name || '',
-                  profile_picture_url: driverInfo.profile_picture_url || null,
-                  phone_number: driverInfo.phone_number || '',
-                  rating: driverInfo.rating || 0,
-                  total_rides: driverInfo.total_rides || 0
-                },
-                vehicle: {
-                  type: ride.vehicle_type,
-                  number: ride.vehicle_number || driverInfo.vehicle_registration_number,
-                  model: ride.vehicle_model || '',
-                  color: ride.vehicle_color || ''
-                }
-              });
-
-              console.log(`✅ PostGIS match: ${ride.origin} → ${ride.destination} (${Math.round((originDistance || 0) / 1000)}km + ${Math.round((destDistance || 0) / 1000)}km)`);
+            if (!driverError && driver) {
+              driverInfo = {
+                display_name: driver.display_name || `${driver.first_name || ''} ${driver.last_name || ''}`.trim() || 'Driver',
+                first_name: driver.first_name || '',
+                last_name: driver.last_name || '',
+                profile_picture_url: driver.profile_url || null
+              };
             }
-          } catch (postgisError) {
-            console.log('PostGIS function failed, falling back to text matching for ride:', ride.ride_id);
-            // Fall back to text-based matching for this ride
-            const textMatch = checkTextMatch(ride, origin, destination);
-            if (textMatch) {
-              const driverInfo = (ride as any).drivers?.[0] || {};
-              filteredRides.push({
-                ...ride,
-                distances: null,
-                driver: {
-                  user_id: driverInfo.user_id || ride.driver_id,
-                  display_name: driverInfo.display_name || `${driverInfo.first_name || ''} ${driverInfo.last_name || ''}`.trim() || 'Driver',
-                  first_name: driverInfo.first_name || '',
-                  last_name: driverInfo.last_name || '',
-                  profile_picture_url: driverInfo.profile_picture_url || null,
-                  phone_number: driverInfo.phone_number || '',
-                  rating: driverInfo.rating || 0,
-                  total_rides: driverInfo.total_rides || 0
-                },
-                vehicle: {
-                  type: ride.vehicle_type,
-                  number: ride.vehicle_number || driverInfo.vehicle_registration_number,
-                  model: ride.vehicle_model || '',
-                  color: ride.vehicle_color || ''
-                }
-              });
-            }
+          } catch (error) {
+            console.warn('Failed to fetch driver info for ride:', ride.ride_id, error);
           }
         }
-
-        console.log(`✅ PostGIS found ${filteredRides.length} rides within ${maxRadius/1000}km radius`);
-      } else {
-        console.log('⚠️ PostGIS query failed:', postgisError?.message);
-      }
-    }
-
-    // If PostGIS didn't find results or coordinates not available, use text-based search
-    if (filteredRides.length === 0) {
-      console.log('🔤 Using text-based location search as fallback');
-
-      let textQuery = supabase
-        .from('rides')
-        .select(`
-          ride_id,
-          vehicle_type,
-          vehicle_number,
-          vehicle_model,
-          vehicle_color,
-          origin,
-          destination,
-          origin_state,
-          destination_state,
-          departure_time,
-          arrival_time,
-          seats_total,
-          seats_available,
-          price_per_seat,
-          status,
-          created_at,
-          driver_id,
-          pickup_points,
-          drop_points,
-          amenities,
-          driver_notes,
-          total_distance,
-          estimated_duration,
-          drivers!inner (
-            user_id,
-            first_name,
-            last_name,
-            display_name,
-            profile_picture_url,
-            phone_number,
-            rating,
-            total_rides,
-            vehicle_registration_number
-          )
-        `)
-        .eq('status', 'open')
-        .gte('seats_available', passengersNeeded);
-
-      // Add date range filter if provided (±7 days)
-      if (travelDate) {
-        const selectedDate = new Date(travelDate);
-        const startDateObj = new Date(selectedDate);
-        startDateObj.setDate(selectedDate.getDate() - 7);
-        const endDateObj = new Date(selectedDate);
-        endDateObj.setDate(selectedDate.getDate() + 7);
         
-        const startDate = startDateObj.toISOString().split('T')[0];
-        const endDate = endDateObj.toISOString().split('T')[0];
-        
-        console.log(`📅 Text search: searching rides from ${startDate} to ${endDate} (±7 days from ${travelDate})`);
-        console.log(`🔍 Text search date filter: ${startDate}T00:00:00Z to ${endDate}T23:59:59Z`);
-        
-        textQuery = textQuery
-          .gte('departure_time', `${startDate}T00:00:00Z`)
-          .lte('departure_time', `${endDate}T23:59:59Z`);
-      }
-
-      // Add vehicle type filter if specified
-      if (vehiclePreferences && vehiclePreferences.length > 0) {
-        textQuery = textQuery.in('vehicle_type', vehiclePreferences);
-      }
-
-      const { data: textRides, error: textError } = await textQuery;
-
-      if (!textError && textRides) {
-        // Apply text-based location matching
-        filteredRides = textRides
-          .filter((ride: any) => checkTextMatch(ride, origin, destination))
-          .map((ride: any) => {
-            const driverInfo = ride.drivers?.[0] || {};
-            return {
+        matchedRides.push({
               ...ride,
-              distances: null,
-              driver: {
-                user_id: driverInfo.user_id || ride.driver_id,
-                display_name: driverInfo.display_name || `${driverInfo.first_name || ''} ${driverInfo.last_name || ''}`.trim() || 'Driver',
-                first_name: driverInfo.first_name || '',
-                last_name: driverInfo.last_name || '',
-                profile_picture_url: driverInfo.profile_picture_url || null,
-                phone_number: driverInfo.phone_number || '',
-                rating: driverInfo.rating || 0,
-                total_rides: driverInfo.total_rides || 0
-              },
-              vehicle: {
-                type: ride.vehicle_type,
-                number: ride.vehicle_number || driverInfo.vehicle_registration_number,
-                model: ride.vehicle_model || '',
-                color: ride.vehicle_color || ''
-              }
-            };
-          });
-
-        console.log(`✅ Text-based search found ${filteredRides.length} matching rides`);
+          driver: driverInfo,
+          match_percentage: matchResult.match_percentage,
+          match_reason: matchResult.reason,
+          stopovers: rideStopovers.map((stop: any) => ({
+            landmark: stop.landmark,
+            sequence: stop.sequence
+          }))
+        });
       }
     }
 
-    // Sort rides by relevance
-    const sortedRides = filteredRides.sort((a: any, b: any) => {
-      // Prioritize PostGIS matches with distance data
-      if (a.distances && !b.distances) return -1;
-      if (!a.distances && b.distances) return 1;
-      
-      // Sort by total distance if both have PostGIS data
-      if (a.distances && b.distances) {
-        return a.distances.total_km - b.distances.total_km;
-      }
-      
-      // Sort by available seats
-      if (a.seats_available !== b.seats_available) {
-        return b.seats_available - a.seats_available;
-      }
-      
-      // Sort by departure time
-      return new Date(a.departure_time).getTime() - new Date(b.departure_time).getTime();
-    });
+    // Sort rides by match percentage (descending)
+    const sortedRides = matchedRides.sort((a, b) => b.match_percentage - a.match_percentage);
 
     console.log(`🎯 Returning ${sortedRides.length} matching rides`);
 
@@ -370,11 +211,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         rides: sortedRides,
         metadata: {
           totalFound: sortedRides.length,
-          searchRadius: maxRadius / 1000,
-          searchDate: travelDate || 'Any date',
           passengersNeeded,
-          usedPostGIS: sortedRides.some(r => r.distances !== null),
-          searchMethod: filteredRides.some(r => r.distances) ? 'PostGIS Geographic (30km radius)' : 'Text-based'
+          searchMethod: 'Custom Location-Based Matching'
         }
       }
     });
@@ -388,40 +226,380 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 }
 
-// Helper function for text-based location matching
-function checkTextMatch(ride: any, origin: any, destination: any): boolean {
-  const originMatch = 
-    (ride.origin_state && origin.state && 
-      (ride.origin_state.toLowerCase().includes(origin.state.toLowerCase()) ||
-       origin.state.toLowerCase().includes(ride.origin_state.toLowerCase()) ||
-       // Handle Delhi variations
-       (origin.state.toLowerCase().includes('delhi') && ride.origin_state.toLowerCase().includes('delhi')) ||
-       // Handle NCR region
-       (origin.state.toLowerCase().includes('haryana') && ride.origin_state.toLowerCase().includes('delhi')) ||
-       (origin.state.toLowerCase().includes('delhi') && ride.origin_state.toLowerCase().includes('haryana'))
-      )) ||
-    (ride.origin && origin.location && ride.origin.toLowerCase().includes(origin.location.toLowerCase())) ||
-    (origin.location && ride.origin_state && origin.location.toLowerCase().includes(ride.origin_state.toLowerCase())) ||
-    (origin.location && ride.origin && ride.origin.toLowerCase().includes(origin.location.toLowerCase()));
-
-  const destMatch = 
-    (ride.destination_state && destination.state && 
-      (ride.destination_state.toLowerCase().includes(destination.state.toLowerCase()) ||
-       destination.state.toLowerCase().includes(ride.destination_state.toLowerCase()) ||
-       // Handle Punjab/Mohali/Chandigarh region
-       (destination.state.toLowerCase().includes('punjab') && ride.destination_state.toLowerCase().includes('mohali')) ||
-       (destination.state.toLowerCase().includes('mohali') && ride.destination_state.toLowerCase().includes('punjab')) ||
-       (destination.location && destination.location.toLowerCase().includes('landran') && ride.destination.toLowerCase().includes('landran'))
-      )) ||
-    (ride.destination && destination.location && ride.destination.toLowerCase().includes(destination.location.toLowerCase())) ||
-    (destination.location && ride.destination_state && destination.location.toLowerCase().includes(ride.destination_state.toLowerCase())) ||
-    (destination.location && ride.destination && ride.destination.toLowerCase().includes(destination.location.toLowerCase()));
-
-  const result = originMatch && destMatch;
+// Parse Mapbox query format: "Locality, City, State, Country"
+function parseMapboxQuery(locationString: string): ParsedLocation {
+  const parts = locationString.split(',').map(part => part.trim());
   
-  if (result) {
-    console.log(`✅ Text match: ${ride.origin} → ${ride.destination}`);
+  // Reverse the array: ["Connaught Place", "New Delhi", "Delhi", "India"] -> ["India", "Delhi", "New Delhi", "Connaught Place"]
+  const reversed = parts.reverse();
+  
+  return {
+    state: reversed[1] || '', // Second item (Delhi) - this is the state
+    city_or_region: reversed[2] || '', // Third item (New Delhi) - this is the city/region
+    locality_or_landmark: reversed[3] || '' // Fourth item (Connaught Place) - this is the landmark
+  };
+}
+
+// Helper function to check if two states match (handles variations)
+function statesMatch(state1: string, state2: string): boolean {
+  if (!state1 || !state2) return false;
+  
+  const s1 = state1.toLowerCase().trim();
+  const s2 = state2.toLowerCase().trim();
+  
+  // Exact match
+  if (s1 === s2) return true;
+  
+  // Handle common variations and abbreviations - more strict matching
+  const variations: { [key: string]: string[] } = {
+    // Delhi variations
+    'delhi': ['new delhi', 'delhi', 'ncr'],
+    'new delhi': ['delhi', 'new delhi', 'ncr'],
+    'ncr': ['delhi', 'new delhi', 'ncr'],
+    
+    // Rajasthan variations
+    'rajasthan': ['jaipur', 'rajasthan'],
+    'jaipur': ['rajasthan', 'jaipur'],
+    
+    // Punjab variations
+    'punjab': ['chandigarh', 'punjab', 'mohali'],
+    'chandigarh': ['punjab', 'chandigarh', 'mohali'],
+    'mohali': ['punjab', 'chandigarh', 'mohali'],
+    
+    // Maharashtra variations
+    'maharashtra': ['mumbai', 'maharashtra'],
+    'mumbai': ['maharashtra', 'mumbai'],
+    
+    // Karnataka variations
+    'karnataka': ['bangalore', 'bengaluru', 'karnataka'],
+    'bangalore': ['karnataka', 'bangalore', 'bengaluru'],
+    'bengaluru': ['karnataka', 'bangalore', 'bengaluru'],
+    
+    // Tamil Nadu variations
+    'tamil nadu': ['chennai', 'tamil nadu'],
+    'chennai': ['tamil nadu', 'chennai'],
+    
+    // Kerala variations
+    'kerala': ['kochi', 'trivandrum', 'kerala'],
+    'kochi': ['kerala', 'kochi', 'trivandrum'],
+    'trivandrum': ['kerala', 'kochi', 'trivandrum'],
+    
+    // Gujarat variations
+    'gujarat': ['ahmedabad', 'surat', 'gujarat'],
+    'ahmedabad': ['gujarat', 'ahmedabad', 'surat'],
+    'surat': ['gujarat', 'ahmedabad', 'surat'],
+    
+    // Uttar Pradesh variations
+    'uttar pradesh': ['lucknow', 'kanpur', 'uttar pradesh'],
+    'lucknow': ['uttar pradesh', 'lucknow', 'kanpur'],
+    'kanpur': ['uttar pradesh', 'lucknow', 'kanpur'],
+    
+    // Madhya Pradesh variations
+    'madhya pradesh': ['bhopal', 'indore', 'madhya pradesh'],
+    'bhopal': ['madhya pradesh', 'bhopal', 'indore'],
+    'indore': ['madhya pradesh', 'bhopal', 'indore'],
+    
+    // Bihar variations
+    'bihar': ['patna', 'bihar'],
+    'patna': ['bihar', 'patna'],
+    
+    // West Bengal variations
+    'west bengal': ['kolkata', 'calcutta', 'west bengal'],
+    'kolkata': ['west bengal', 'kolkata', 'calcutta'],
+    'calcutta': ['west bengal', 'kolkata', 'calcutta'],
+    
+    // Andhra Pradesh variations
+    'andhra pradesh': ['hyderabad', 'vijayawada', 'andhra pradesh'],
+    'hyderabad': ['andhra pradesh', 'hyderabad', 'vijayawada'],
+    'vijayawada': ['andhra pradesh', 'hyderabad', 'vijayawada'],
+    
+    // Telangana variations
+    'telangana': ['hyderabad', 'telangana'],
+    
+    // Odisha variations
+    'odisha': ['bhubaneswar', 'cuttack', 'odisha', 'orissa'],
+    'bhubaneswar': ['odisha', 'bhubaneswar', 'cuttack', 'orissa'],
+    'orissa': ['odisha', 'bhubaneswar', 'cuttack', 'orissa'],
+    
+    // Jharkhand variations
+    'jharkhand': ['ranchi', 'jamshedpur', 'jharkhand'],
+    'ranchi': ['jharkhand', 'ranchi', 'jamshedpur'],
+    'jamshedpur': ['jharkhand', 'ranchi', 'jamshedpur'],
+    
+    // Chhattisgarh variations
+    'chhattisgarh': ['raipur', 'bilaspur', 'chhattisgarh'],
+    'raipur': ['chhattisgarh', 'raipur', 'bilaspur'],
+    'bilaspur': ['chhattisgarh', 'raipur', 'bilaspur'],
+    
+    // Assam variations
+    'assam': ['guwahati', 'assam'],
+    'guwahati': ['assam', 'guwahati'],
+    
+    // Manipur variations
+    'manipur': ['imphal', 'manipur'],
+    'imphal': ['manipur', 'imphal'],
+    
+    // Meghalaya variations
+    'meghalaya': ['shillong', 'meghalaya'],
+    'shillong': ['meghalaya', 'shillong'],
+    
+    // Mizoram variations
+    'mizoram': ['aizawl', 'mizoram'],
+    'aizawl': ['mizoram', 'aizawl'],
+    
+    // Nagaland variations
+    'nagaland': ['kohima', 'nagaland'],
+    'kohima': ['nagaland', 'kohima'],
+    
+    // Tripura variations
+    'tripura': ['agartala', 'tripura'],
+    'agartala': ['tripura', 'agartala'],
+    
+    // Arunachal Pradesh variations
+    'arunachal pradesh': ['itanagar', 'arunachal pradesh'],
+    'itanagar': ['arunachal pradesh', 'itanagar'],
+    
+    // Sikkim variations
+    'sikkim': ['gangtok', 'sikkim'],
+    'gangtok': ['sikkim', 'gangtok'],
+    
+    // Goa variations
+    'goa': ['panaji', 'margao', 'goa'],
+    'panaji': ['goa', 'panaji', 'margao'],
+    'margao': ['goa', 'panaji', 'margao'],
+    
+    // Himachal Pradesh variations
+    'himachal pradesh': ['shimla', 'manali', 'himachal pradesh'],
+    'shimla': ['himachal pradesh', 'shimla', 'manali'],
+    'manali': ['himachal pradesh', 'shimla', 'manali'],
+    
+    // Uttarakhand variations
+    'uttarakhand': ['dehradun', 'rishikesh', 'uttarakhand'],
+    'dehradun': ['uttarakhand', 'dehradun', 'rishikesh'],
+    'rishikesh': ['uttarakhand', 'dehradun', 'rishikesh'],
+    
+    // Haryana variations
+    'haryana': ['gurgaon', 'gurugram', 'faridabad', 'haryana'],
+    'gurgaon': ['haryana', 'gurgaon', 'gurugram', 'faridabad'],
+    'gurugram': ['haryana', 'gurgaon', 'gurugram', 'faridabad'],
+    'faridabad': ['haryana', 'gurgaon', 'gurugram', 'faridabad'],
+    
+    // Special cases for cities that might be stored as states
+    'shiggaon': ['shiggaon', 'karnataka'],
+    'karnal': ['karnal', 'haryana'],
+    'pilani': ['pilani', 'rajasthan']
+  };
+  
+  // Check if either state has variations that match the other
+  for (const [key, values] of Object.entries(variations)) {
+    if (values.includes(s1) && values.includes(s2)) {
+      return true;
+    }
+  }
+  
+  // More strict partial matching - only if one is clearly contained in the other
+  // and the difference is not too large
+  if (s1.includes(s2) || s2.includes(s1)) {
+    const longer = s1.length > s2.length ? s1 : s2;
+    const shorter = s1.length > s2.length ? s2 : s1;
+    
+    // Only allow partial matches if the shorter string is at least 4 characters
+    // and the difference in length is not too large
+    if (shorter.length >= 4 && (longer.length - shorter.length) <= 3) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+// Calculate location match based on the 10 matching cases with proper prioritization
+function calculateLocationMatch(
+  ride: any,
+  rideStopovers: any[],
+  parsedOrigin: ParsedLocation,
+  parsedDestination: ParsedLocation
+): { match_percentage: number; reason: string } {
+  
+  console.log(`🔍 Matching ride: ${ride.origin_state} → ${ride.destination_state}`);
+  console.log(`   User query: ${parsedOrigin.state} → ${parsedDestination.state}`);
+  console.log(`   User city/region: ${parsedOrigin.city_or_region} → ${parsedDestination.city_or_region}`);
+  console.log(`   User landmark: ${parsedOrigin.locality_or_landmark} → ${parsedDestination.locality_or_landmark}`);
+  
+  // Case 0: EXACT MATCH - Both origin and destination match exactly (100%)
+  // This is the highest priority - exact matches for both origin and destination
+  if (ride.origin_state && ride.destination_state &&
+      (ride.origin_state.toLowerCase() === parsedOrigin.state.toLowerCase() ||
+       ride.origin_state.toLowerCase() === parsedOrigin.city_or_region.toLowerCase()) &&
+      (ride.destination_state.toLowerCase() === parsedDestination.state.toLowerCase() ||
+       ride.destination_state.toLowerCase() === parsedDestination.city_or_region.toLowerCase())) {
+    console.log(`   ✅ Case 0: Exact match (100%)`);
+    return {
+      match_percentage: 100,
+      reason: 'Both origin and destination match exactly'
+    };
   }
 
-  return result;
+  // Case 1: Both Origin State and Destination State Match (95%)
+  // This is the highest priority - exact state matches for both origin and destination
+  if (ride.origin_state && ride.destination_state &&
+      statesMatch(ride.origin_state, parsedOrigin.state) &&
+      statesMatch(ride.destination_state, parsedDestination.state)) {
+    console.log(`   ✅ Case 1: Both states match (95%)`);
+    return {
+      match_percentage: 95,
+      reason: 'Both origin and destination states match exactly'
+    };
+  }
+
+  // Case 2: Origin State + Destination City/Region Match (90%)
+  if (ride.origin_state && ride.destination_state &&
+      statesMatch(ride.origin_state, parsedOrigin.state) &&
+      (ride.destination_state.toLowerCase() === parsedDestination.city_or_region.toLowerCase() ||
+       ride.destination_state.toLowerCase().includes(parsedDestination.city_or_region.toLowerCase()))) {
+    console.log(`   ✅ Case 2: Origin state + destination city match (90%)`);
+    return {
+      match_percentage: 90,
+      reason: 'Origin state matches and destination city/region matches'
+    };
+  }
+
+  // Case 3: Origin City/Region + Destination State Match (90%)
+  if (ride.origin_state && ride.destination_state &&
+      (ride.origin_state.toLowerCase() === parsedOrigin.city_or_region.toLowerCase() ||
+       ride.origin_state.toLowerCase().includes(parsedOrigin.city_or_region.toLowerCase())) &&
+      statesMatch(ride.destination_state, parsedDestination.state)) {
+    console.log(`   ✅ Case 3: Origin city + destination state match (90%)`);
+    return {
+      match_percentage: 90,
+      reason: 'Origin city/region matches and destination state matches'
+    };
+  }
+
+  // Case 4: Only Origin State Matches (70%)
+  if (ride.origin_state && statesMatch(ride.origin_state, parsedOrigin.state)) {
+    console.log(`   ✅ Case 4: Origin state matches (70%)`);
+    return {
+      match_percentage: 70,
+      reason: 'Origin state matches, destination differs'
+    };
+  }
+
+  // Case 5: Only Destination State Matches (65%)
+  if (ride.destination_state && statesMatch(ride.destination_state, parsedDestination.state)) {
+    console.log(`   ✅ Case 5: Destination state matches (65%)`);
+    return {
+      match_percentage: 65,
+      reason: 'Destination state matches, origin differs'
+    };
+  }
+
+  // Case 6: Origin State + Landmark (Ride Stopovers) Match (85%)
+  if (ride.origin_state && statesMatch(ride.origin_state, parsedOrigin.state)) {
+    for (const stopover of rideStopovers) {
+      if (stopover.landmark && 
+          (stopover.landmark.toLowerCase().includes(parsedOrigin.city_or_region.toLowerCase()) ||
+           stopover.landmark.toLowerCase().includes(parsedOrigin.locality_or_landmark.toLowerCase()))) {
+        console.log(`   ✅ Case 6: Origin state + landmark match (85%)`);
+        return {
+          match_percentage: 85,
+          reason: 'Origin state matches and stopover landmark matches user location'
+        };
+      }
+    }
+  }
+
+  // Case 7: Origin State + City/Region Matches as Part of Origin State (75%)
+  if (ride.origin_state && 
+      ride.origin_state.toLowerCase().includes(parsedOrigin.city_or_region.toLowerCase())) {
+    console.log(`   ✅ Case 7: Origin state includes city/region (75%)`);
+    return {
+      match_percentage: 75,
+      reason: 'Origin state includes user city/region as substring'
+    };
+  }
+
+  // Case 8: City/Region Matches with Landmark (70%)
+  for (const stopover of rideStopovers) {
+    if (stopover.landmark && 
+        stopover.landmark.toLowerCase().includes(parsedOrigin.city_or_region.toLowerCase())) {
+      console.log(`   ✅ Case 8: City/region matches landmark (70%)`);
+      return {
+        match_percentage: 70,
+        reason: 'User city/region matches stopover landmark'
+      };
+    }
+  }
+
+  // Case 9: Only City/Region Matches in Origin State (60%)
+  if (ride.origin_state && 
+      ride.origin_state.toLowerCase().includes(parsedOrigin.city_or_region.toLowerCase())) {
+    console.log(`   ✅ Case 9: City/region matches origin state (60%)`);
+    return {
+      match_percentage: 60,
+      reason: 'User city/region partially matches origin state'
+    };
+  }
+
+  // Case 10: Only Landmark Matches in Ride Stopovers (50%)
+  for (const stopover of rideStopovers) {
+    if (stopover.landmark && 
+        (stopover.landmark.toLowerCase().includes(parsedOrigin.locality_or_landmark.toLowerCase()) ||
+         stopover.landmark.toLowerCase().includes(parsedDestination.locality_or_landmark.toLowerCase()))) {
+      console.log(`   ✅ Case 10: Landmark matches stopover (50%)`);
+      return {
+        match_percentage: 50,
+        reason: 'User landmark matches stopover location'
+      };
+    }
+  }
+
+  // Case 11: City/Region Matches Destination State (55%)
+  if (ride.destination_state && 
+      ride.destination_state.toLowerCase().includes(parsedDestination.city_or_region.toLowerCase())) {
+    console.log(`   ✅ Case 11: City/region matches destination state (55%)`);
+    return {
+      match_percentage: 55,
+      reason: 'User city/region matches destination state'
+    };
+  }
+
+  // Case 12: Landmark Matches Destination Stopovers (45%)
+  for (const stopover of rideStopovers) {
+    if (stopover.landmark && 
+        stopover.landmark.toLowerCase().includes(parsedDestination.locality_or_landmark.toLowerCase())) {
+      console.log(`   ✅ Case 12: Landmark matches destination stopover (45%)`);
+      return {
+        match_percentage: 45,
+        reason: 'User destination landmark matches stopover location'
+      };
+    }
+  }
+
+  // Case 13: Destination City/Region in Ride Destination (80%)
+  if (ride.destination && 
+      ride.destination.toLowerCase().includes(parsedDestination.city_or_region.toLowerCase())) {
+    console.log(`   ✅ Case 13: Destination city in ride destination (80%)`);
+    return {
+      match_percentage: 80,
+      reason: 'User destination city matches ride destination'
+    };
+  }
+
+  // Case 14: Origin City/Region in Ride Origin (80%)
+  if (ride.origin && 
+      ride.origin.toLowerCase().includes(parsedOrigin.city_or_region.toLowerCase())) {
+    console.log(`   ✅ Case 14: Origin city in ride origin (80%)`);
+    return {
+      match_percentage: 80,
+      reason: 'User origin city matches ride origin'
+    };
+  }
+
+  console.log(`   ❌ No significant match found`);
+  // No significant match (< 45%)
+  return {
+    match_percentage: 0,
+    reason: 'No significant location match found'
+  };
 }
