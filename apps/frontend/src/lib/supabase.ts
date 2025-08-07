@@ -23,7 +23,7 @@ export interface UserProfile {
   first_name: string;
   last_name: string;
   display_name: string;
-  role: 'driver' | 'passenger' | 'both';
+  role: 'driver' | 'passenger' | 'both' | 'admin';
   is_email_verified: boolean;
   is_phone_verified: boolean;
   created_at: string;

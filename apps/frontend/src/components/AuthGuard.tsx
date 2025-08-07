@@ -11,19 +11,21 @@ interface AuthGuardProps {
 }
 
 const AuthGuard: React.FC<AuthGuardProps> = ({ children, onLoginRequired }) => {
-  const { user, loading } = useAuth();
+  const { user, userProfile, loading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const [isChecking, setIsChecking] = useState(true);
 
-  // Define protected routes
+  // Define protected routes (excluding admin route)
   const protectedRoutes = [
     '/book',
     '/publish',
     '/rides',
-    '/profile',
-    '/admin'
+    '/profile'
   ];
+
+  // Admin route handles its own authentication
+  const isAdminRoute = pathname?.startsWith('/admin');
 
   // Check if current route is protected
   const isProtectedRoute = protectedRoutes.some(route => 
@@ -34,6 +36,11 @@ const AuthGuard: React.FC<AuthGuardProps> = ({ children, onLoginRequired }) => {
     if (loading) return;
 
     setIsChecking(false);
+
+    // Skip auth guard for admin route - let admin page handle its own auth
+    if (isAdminRoute) {
+      return;
+    }
 
     // If it's a protected route and user is not authenticated
     if (isProtectedRoute && !user) {
@@ -46,12 +53,18 @@ const AuthGuard: React.FC<AuthGuardProps> = ({ children, onLoginRequired }) => {
           onLoginRequired();
         }
       }, 100);
+      return;
     }
-  }, [user, loading, isProtectedRoute, router, onLoginRequired]);
+  }, [user, userProfile, loading, isProtectedRoute, isAdminRoute, router, onLoginRequired]);
 
   // Show loading while checking authentication
   if (loading || isChecking) {
     return <AnimatedLoader />;
+  }
+
+  // Skip auth guard for admin route
+  if (isAdminRoute) {
+    return <>{children}</>;
   }
 
   // If it's a protected route and user is not authenticated, show loading
