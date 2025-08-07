@@ -93,7 +93,7 @@ export const useProfileLogic = () => {
 
   // Initialize form data when userProfile is loaded
   useEffect(() => {
-    if (userProfile) {
+    if (userProfile && !isEditing) {
       setFormData({
         first_name: userProfile.first_name || '',
         last_name: userProfile.last_name || '',
@@ -114,7 +114,7 @@ export const useProfileLogic = () => {
         setPhotoPreview(null);
       }
     }
-  }, [userProfile]);
+  }, [userProfile ? userProfile.id : null, isEditing]);
 
   useEffect(() => {
     const fetchUserProfile = async () => {
@@ -259,7 +259,7 @@ export const useProfileLogic = () => {
         });
         setShowConfirmDialog(true);
         
-        // Reset the input - will be set again if user confirms
+        
         e.target.value = '';
       }
     }

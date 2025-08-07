@@ -97,8 +97,7 @@ const PassengerInformationSection: React.FC<PassengerInformationSectionProps> = 
                 type="tel"
                 name="phone"
                 value={formData.phone}
-                onChange={onInputChange}
-                disabled={!isEditing}
+                disabled
                 className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#4AAAFF] focus:border-[#4AAAFF] outline-none disabled:bg-gray-50 disabled:text-gray-500 transition-all duration-300 font-medium group-hover:border-gray-300"
                 placeholder="Enter your phone number"
               />
