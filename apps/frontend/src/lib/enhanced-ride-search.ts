@@ -112,10 +112,9 @@ class EnhancedRideSearchClient {
     const startTime = Date.now();
 
     try {
-      // Use the correct backend URL
-      const apiUrl = process.env.NODE_ENV === 'development' 
-        ? 'http://localhost:3001/api/rides/search'
-        : '/api/rides/search';
+      // Use the backend URL from environment variable
+      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+      const apiUrl = `${API_BASE_URL}/api/rides/search`;
 
       const response = await fetch(apiUrl, {
         method: 'POST',
@@ -178,10 +177,9 @@ class EnhancedRideSearchClient {
     const startTime = Date.now();
 
     try {
-      // Use the correct backend URL
-      const apiUrl = process.env.NODE_ENV === 'development' 
-        ? 'http://localhost:3001/api/rides/search'
-        : '/api/rides/search';
+      // Use the backend URL from environment variable
+      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+      const apiUrl = `${API_BASE_URL}/api/rides/search`;
 
       console.log('🔍 Making API call to:', apiUrl);
       console.log('📤 Request payload:', {
