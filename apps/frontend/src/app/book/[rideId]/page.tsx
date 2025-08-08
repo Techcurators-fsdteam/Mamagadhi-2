@@ -632,7 +632,7 @@ const RideSummary: React.FC = () => {
                   {formatDateTime(rideData.arrival_time).date}
                 </span>
                 {isDifferentDay(rideData.departure_time, rideData.arrival_time) && (
-                  <span className="text-xs text-orange-600 font-medium mt-1">Next day</span>
+                  <span className="text-xs text-orange-600 font-medium mt-1"></span>
                 )}
               </div>
               <TimelineNode last />
