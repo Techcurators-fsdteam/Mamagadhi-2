@@ -10,6 +10,7 @@ import {
   SearchResponse,
 } from "@/lib/enhanced-ride-search";
 import { useAuth } from "@/lib/auth";
+import { formatTimeIST, formatDateShortIST, isDifferentDayIST } from '@/lib/timezone-utils';
 import toast from "react-hot-toast";
 
 interface RideMatch {
@@ -274,11 +275,7 @@ function BookRide() {
   };
 
   const formatTime = (dateString: string) => {
-    return new Date(dateString).toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    });
+    return formatTimeIST(dateString);
   };
 
   if (authLoading) {
@@ -583,7 +580,22 @@ function BookRide() {
                               <div className="flex items-center justify-center sm:justify-start space-x-4 flex-1">
                                 <div className="text-center">
                                   <div className="text-lg font-semibold text-gray-900">
-                                    {formatTime(ride.departure_time)}
+                                    {(() => {
+                                      const isSameDay = !isDifferentDayIST(ride.departure_time, ride.arrival_time);
+                                      
+                                      if (isSameDay) {
+                                        return formatTime(ride.departure_time);
+                                      } else {
+                                        return (
+                                          <div>
+                                            <div>{formatTime(ride.departure_time)}</div>
+                                            <div className="text-xs text-blue-600 font-medium">
+                                              {formatDateShortIST(ride.departure_time)}
+                                            </div>
+                                          </div>
+                                        );
+                                      }
+                                    })()}
                                   </div>
                                   <div className="text-sm text-gray-600 mt-1">
                                     {ride.origin_state}
@@ -598,7 +610,22 @@ function BookRide() {
 
                                 <div className="text-center">
                                   <div className="text-lg font-semibold text-gray-900">
-                                    {formatTime(ride.arrival_time)}
+                                    {(() => {
+                                      const isSameDay = !isDifferentDayIST(ride.departure_time, ride.arrival_time);
+                                      
+                                      if (isSameDay) {
+                                        return formatTime(ride.arrival_time);
+                                      } else {
+                                        return (
+                                          <div>
+                                            <div>{formatTime(ride.arrival_time)}</div>
+                                            <div className="text-xs text-amber-600 font-medium">
+                                              {formatDateShortIST(ride.arrival_time)}
+                                            </div>
+                                          </div>
+                                        );
+                                      }
+                                    })()}
                                   </div>
                                   <div className="text-sm text-gray-600 mt-1">
                                     {ride.destination_state}

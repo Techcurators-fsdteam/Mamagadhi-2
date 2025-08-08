@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { CalendarIcon, Users, IndianRupee, Minus, Plus, Clock } from 'lucide-react';
 import DatePicker from 'react-datepicker';
+import { isSameDayIST, formatDateIST } from '../../lib/timezone-utils';
 import 'react-datepicker/dist/react-datepicker.css';
 
 interface Stopover {
@@ -195,7 +196,7 @@ const BookingDetailsForm: React.FC<BookingDetailsFormProps> = ({
                         // Calculate actual arrival datetime by adding duration
                         const arrivalDate = new Date(departureDate.getTime() + totalMinutes * 60000);
                         
-                        const isSameDay = departureDate.toDateString() === arrivalDate.toDateString();
+                        const isSameDay = isSameDayIST(departureDate, arrivalDate);
                         
                         return (
                           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
@@ -205,11 +206,7 @@ const BookingDetailsForm: React.FC<BookingDetailsFormProps> = ({
                                 <span className="font-semibold">{bookingDetails.arrivalTime}</span>
                                 {!isSameDay && (
                                   <span className="ml-2 text-amber-600 font-medium">
-                                    on {arrivalDate.toLocaleDateString('en-IN', { 
-                                      weekday: 'short', 
-                                      day: 'numeric', 
-                                      month: 'short' 
-                                    })}
+                                    on {formatDateIST(arrivalDate)}
                                   </span>
                                 )}
                                 {isSameDay && (

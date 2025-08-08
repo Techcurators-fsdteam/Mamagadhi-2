@@ -8,6 +8,7 @@ import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import DeleteConfirmationDialog from '@/components/DeleteConfirmationDialog';
 import { supabase } from '@/lib/supabase';
+import { formatTimeIST, formatDateIST, formatDateForAdmin, isDifferentDayIST } from '@/lib/timezone-utils';
 import { 
   Car,
   Clock, 
@@ -425,20 +426,11 @@ const MyRidesPage: React.FC = () => {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      weekday: 'short',
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
+    return formatDateIST(dateString);
   };
 
   const formatTime = (dateString: string) => {
-    return new Date(dateString).toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true,
-    });
+    return formatTimeIST(dateString);
   };
 
   const getStatusColor = (status: string) => {

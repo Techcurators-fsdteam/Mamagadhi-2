@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { AlertTriangle, X } from 'lucide-react';
+import { formatDateIST, formatTimeIST } from '../lib/timezone-utils';
 
 interface DeleteConfirmationDialogProps {
   isOpen: boolean;
@@ -25,20 +26,11 @@ const DeleteConfirmationDialog: React.FC<DeleteConfirmationDialogProps> = ({
   if (!isOpen) return null;
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      weekday: 'short',
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
+    return formatDateIST(new Date(dateString));
   };
 
   const formatTime = (dateString: string) => {
-    return new Date(dateString).toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true,
-    });
+    return formatTimeIST(new Date(dateString));
   };
 
   return (

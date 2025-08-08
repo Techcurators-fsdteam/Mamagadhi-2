@@ -13,6 +13,7 @@ import {
 } from 'react-icons/io5';
 import Navbar from '../../../components/Navbar';
 import Footer from '../../../components/Footer';
+import { formatTimeIST, formatDateIST, formatDateTimeIST, formatDateShortIST, calculateDurationIST, isDifferentDayIST } from '@/lib/timezone-utils';
 import { useRouter, useParams } from 'next/navigation';
 import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../lib/auth';
@@ -260,57 +261,27 @@ const RideSummary: React.FC = () => {
   }, [rideData, user?.uid]);
 
   const formatDuration = (departureTime: string, arrivalTime: string) => {
-    const departure = new Date(departureTime);
-    const arrival = new Date(arrivalTime);
-    const diffMs = arrival.getTime() - departure.getTime();
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-    
-    if (diffHours > 0) {
-      return `${diffHours}h${diffMinutes > 0 ? ` ${diffMinutes}m` : ''}`;
-    }
-    return `${diffMinutes}m`;
+    return calculateDurationIST(departureTime, arrivalTime);
   };
 
   const formatTime = (timeString: string) => {
-    return new Date(timeString).toLocaleTimeString('en-IN', {
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    return formatTimeIST(timeString);
   };
 
   const formatDate = (timeString: string) => {
-    return new Date(timeString).toLocaleDateString('en-IN', {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long'
-    });
+    return formatDateIST(timeString);
   };
 
   const formatDateShort = (timeString: string) => {
-    return new Date(timeString).toLocaleDateString('en-IN', {
-      day: 'numeric',
-      month: 'short'
-    });
+    return formatDateShortIST(timeString);
   };
 
   const formatDateTime = (timeString: string) => {
-    const date = new Date(timeString);
-    const time = date.toLocaleTimeString('en-IN', {
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-    const dateShort = date.toLocaleDateString('en-IN', {
-      day: 'numeric',
-      month: 'short'
-    });
-    return { time, date: dateShort };
+    return formatDateTimeIST(timeString);
   };
 
   const isDifferentDay = (departure: string, arrival: string) => {
-    const departureDate = new Date(departure);
-    const arrivalDate = new Date(arrival);
-    return departureDate.toDateString() !== arrivalDate.toDateString();
+    return isDifferentDayIST(departure, arrival);
   };
 
   if (loading) {
@@ -658,10 +629,7 @@ const RideSummary: React.FC = () => {
               <div className="flex flex-col items-center">
                 <span className="font-semibold text-sm sm:text-base">{formatDateTime(rideData.arrival_time).time}</span>
                 <span className="text-xs text-gray-500 mt-1">
-                  {isDifferentDay(rideData.departure_time, rideData.arrival_time) 
-                    ? formatDateTime(rideData.arrival_time).date 
-                    : formatDateTime(rideData.arrival_time).date
-                  }
+                  {formatDateTime(rideData.arrival_time).date}
                 </span>
                 {isDifferentDay(rideData.departure_time, rideData.arrival_time) && (
                   <span className="text-xs text-orange-600 font-medium mt-1">Next day</span>

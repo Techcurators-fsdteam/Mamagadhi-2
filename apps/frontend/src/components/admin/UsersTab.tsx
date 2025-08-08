@@ -5,6 +5,7 @@ import { UserWithDriverProfile } from '../../types/admin';
 import { DataTable } from './DataTable';
 import { VerificationButton, DocumentLink, StatusBadge } from './AdminComponents';
 import { updateDriverVerification } from '../../lib/admin-api';
+import { formatDateIST } from '../../lib/timezone-utils';
 
 interface UsersTabProps {
   users: UserWithDriverProfile[];
@@ -109,7 +110,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({ users, onRefresh }) => {
       label: 'Joined',
       render: (value: string) => (
         <span className="text-sm text-gray-600">
-          {new Date(value).toLocaleDateString()}
+          {formatDateIST(new Date(value))}
         </span>
       )
     }

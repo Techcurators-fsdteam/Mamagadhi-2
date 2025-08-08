@@ -4,6 +4,7 @@ import React from 'react';
 import { BookingWithDetails } from '../../types/admin';
 import { DataTable } from './DataTable';
 import { StatusBadge } from './AdminComponents';
+import { formatDateIST } from '../../lib/timezone-utils';
 
 interface BookingsTabProps {
   bookings: BookingWithDetails[];
@@ -32,7 +33,7 @@ export const BookingsTab: React.FC<BookingsTabProps> = ({ bookings, onRefresh })
                 {row.ride.origin} → {row.ride.destination}
               </div>
               <div className="text-xs text-gray-500">
-                {new Date(row.ride.departure_time).toLocaleDateString()} - {row.ride.vehicle_type}
+                {formatDateIST(new Date(row.ride.departure_time))} - {row.ride.vehicle_type}
               </div>
             </>
           ) : (
@@ -89,11 +90,11 @@ export const BookingsTab: React.FC<BookingsTabProps> = ({ bookings, onRefresh })
       render: (_: any, row: BookingWithDetails) => (
         <div className="space-y-1">
           <div className="text-xs">
-            <strong>Created:</strong> {new Date(row.created_at).toLocaleDateString()}
+            <strong>Created:</strong> {formatDateIST(new Date(row.created_at))}
           </div>
           {row.responded_at && (
             <div className="text-xs">
-              <strong>Responded:</strong> {new Date(row.responded_at).toLocaleDateString()}
+              <strong>Responded:</strong> {formatDateIST(new Date(row.responded_at))}
             </div>
           )}
         </div>

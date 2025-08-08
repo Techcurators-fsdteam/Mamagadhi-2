@@ -14,6 +14,7 @@ import {
   EnhancedSearchLocation 
 } from '@/lib/enhanced-search';
 import { getRoute, formatDistance, formatDuration } from '@/lib/mapbox';
+import { combineDateTimeIST } from '@/lib/timezone-utils';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import StepHeader from '@/components/publish/StepHeader';
@@ -360,9 +361,25 @@ const PublishDetailsPage: React.FC = () => {
       // Show loading toast
       const loadingToast = toast.loading('Publishing your ride...');
       
+      // Format the date properly for backend processing
+      const formattedBookingDetails = {
+        ...bookingDetails,
+        // Format date as YYYY-MM-DD string without timezone interference
+        date: bookingDetails.date ? 
+          `${bookingDetails.date.getFullYear()}-${(bookingDetails.date.getMonth() + 1).toString().padStart(2, '0')}-${bookingDetails.date.getDate().toString().padStart(2, '0')}` 
+          : null
+      };
+      
+      console.log('Frontend sending data:', {
+        originalDate: bookingDetails.date,
+        formattedDate: formattedBookingDetails.date,
+        departureTime: formattedBookingDetails.departureTime,
+        arrivalTime: formattedBookingDetails.arrivalTime
+      });
+      
       const rideData = {
         formData,
-        bookingDetails,
+        bookingDetails: formattedBookingDetails,
         stopovers,
         originCoords,
         destinationCoords,

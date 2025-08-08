@@ -3,6 +3,7 @@
 import React from 'react';
 import Image from 'next/image';
 import { X, MapPin, Clock, Users, Car, Phone, Star, Calendar, Route } from 'lucide-react';
+import { formatTimeIST, formatDateIST } from '../../lib/timezone-utils';
 
 interface Driver {
   user_id: string;
@@ -61,20 +62,11 @@ export default function RideDetailsModal({ ride, isOpen, onClose, onBook }: Ride
   if (!isOpen || !ride) return null;
 
   const formatTime = (dateTime: string) => {
-    return new Date(dateTime).toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true
-    });
+    return formatTimeIST(dateTime);
   };
 
   const formatDate = (dateTime: string) => {
-    return new Date(dateTime).toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
+    return formatDateIST(dateTime);
   };
 
   const renderStars = (rating: number) => {

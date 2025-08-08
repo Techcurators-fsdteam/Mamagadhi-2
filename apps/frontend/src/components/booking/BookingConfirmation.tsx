@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Button } from '../ui/button';
 import { X, User, MessageSquare, Star, Car, MapPin } from 'lucide-react';
+import { formatTimeIST, formatDateShortIST, calculateDurationIST } from '../../lib/timezone-utils';
 
 interface BookingConfirmationProps {
   ride: any;
@@ -41,49 +42,19 @@ const BookingConfirmation: React.FC<BookingConfirmationProps> = ({
   };
 
   const formatTime = (dateString: string) => {
-    return new Date(dateString).toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false
-    });
+    return formatTimeIST(dateString);
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric'
-    });
+    return formatDateShortIST(dateString);
   };
 
-  const calculateEstimatedArrival = () => {
+  const calculateDuration = () => {
     if (!ride.departure_time || !ride.arrival_time) return null;
-    
-    const departureDate = new Date(ride.departure_time);
-    const arrivalTime = new Date(ride.arrival_time);
-    
-    // Calculate duration in hours
-    const durationHours = (arrivalTime.getTime() - departureDate.getTime()) / (1000 * 60 * 60);
-    
-    // Create estimated arrival date by adding duration to departure date
-    const estimatedArrival = new Date(departureDate.getTime() + (durationHours * 60 * 60 * 1000));
-    
-    return {
-      time: estimatedArrival.toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false
-      }),
-      date: estimatedArrival.toLocaleDateString('en-US', {
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric'
-      }),
-      duration: `${Math.floor(durationHours)}h ${Math.round((durationHours % 1) * 60)}m`
-    };
+    return calculateDurationIST(ride.departure_time, ride.arrival_time);
   };
 
-  const estimatedArrival = calculateEstimatedArrival();
+  const duration = calculateDuration();
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -116,21 +87,19 @@ const BookingConfirmation: React.FC<BookingConfirmationProps> = ({
                   <div className="w-20 h-px bg-gray-300"></div>
                   <div className="w-3 h-3 bg-red-500 rounded-full"></div>
                 </div>
-                {estimatedArrival && (
+                {duration && (
                   <div className="text-xs text-gray-600 font-medium bg-white px-2 py-1 rounded-full">
-                    {estimatedArrival.duration}
+                    {duration}
                   </div>
                 )}
               </div>
               
               <div className="text-center">
                 <div className="text-xl font-bold text-gray-900">
-                  {estimatedArrival ? estimatedArrival.time : formatTime(ride.arrival_time)}
+                  {formatTime(ride.arrival_time)}
                 </div>
                 <div className="text-sm font-medium text-gray-700">{ride.destination_state}</div>
-                {estimatedArrival && (
-                  <div className="text-xs text-gray-500 mt-1">{estimatedArrival.date}</div>
-                )}
+                <div className="text-xs text-gray-500 mt-1">{formatDate(ride.arrival_time)}</div>
               </div>
             </div>
             

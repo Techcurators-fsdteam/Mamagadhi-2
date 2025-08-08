@@ -191,7 +191,7 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSearch }) => {
   return (
     <form
       onSubmit={handleSubmit}
-      className="w-full max-w-6xl bg-white border border-gray-200 rounded-xl shadow-lg flex flex-col md:flex-row items-stretch md:items-center px-3 py-2 gap-2 md:gap-3 transition-all backdrop-blur-sm overflow-hidden min-h-[48px]"
+      className="w-full max-w-7xl bg-white border border-gray-200 rounded-xl shadow-lg flex flex-col md:flex-row items-stretch md:items-center px-3 py-2 gap-2 md:gap-3 transition-all backdrop-blur-sm overflow-hidden min-h-[48px]"
     >
       {/* Origin/From Field */}
       <div className="flex-1 min-w-0">
@@ -326,14 +326,14 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSearch }) => {
       </div>
 
       {/* Passengers Field */}
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-[120px]">
         <Popover open={openPassengers} onOpenChange={setOpenPassengers}>
           <PopoverTrigger asChild>
-            <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-2 py-1.5 hover:bg-blue-50 transition min-h-[36px] cursor-pointer">
-              <span className="w-full text-left text-sm text-gray-700 min-w-0 px-1 py-0.5 h-7">
+            <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-1.5 hover:bg-blue-50 transition min-h-[36px] cursor-pointer">
+              <span className="text-left text-sm text-gray-700 whitespace-nowrap">
                 {passengers} {passengers === 1 ? "passenger" : "passengers"}
               </span>
-              <div className="text-gray-400 text-xs">▼</div>
+              <div className="text-gray-400 text-xs ml-auto">▼</div>
             </div>
           </PopoverTrigger>
           <PopoverContent className="w-full p-0" align="start">

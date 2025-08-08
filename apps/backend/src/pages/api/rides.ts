@@ -6,7 +6,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// Helper function to combine date and time into ISO string
+// Helper function to combine date and time into ISO string with IST handling
 const combineDateAndTime = (date: string, time: string): string => {
   if (!date || !time) return new Date().toISOString();
   
@@ -20,10 +20,21 @@ const combineDateAndTime = (date: string, time: string): string => {
     const hours = parseInt(timeParts[0] || '0', 10);
     const minutes = parseInt(timeParts[1] || '0', 10);
     
-    // Create date in IST (UTC+5:30), then convert to UTC for storage
-    const dateObj = new Date(year, month - 1, day, hours, minutes, 0, 0);
-    // Subtract 5.5 hours to convert from IST to UTC
-    const utcDateTime = new Date(dateObj.getTime() - (5.5 * 60 * 60 * 1000));
+    // Create date in IST timezone using a more explicit approach
+    // IST is UTC+05:30, so we need to create the UTC equivalent
+    
+    // Create a date string that explicitly represents IST time
+    const istDateString = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}T${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00+05:30`;
+    
+    // Parse this IST date and convert to UTC
+    const utcDateTime = new Date(istDateString);
+    
+    console.log('Date conversion:', {
+      input: { date, time },
+      istString: istDateString,
+      utcResult: utcDateTime.toISOString()
+    });
+    
     return utcDateTime.toISOString();
   } catch (error) {
     console.error('Error combining date and time:', error);
@@ -33,7 +44,7 @@ const combineDateAndTime = (date: string, time: string): string => {
 
 // Function to calculate arrival datetime based on departure datetime and estimated duration from frontend
 const calculateArrivalDateTime = (departureDateTime: string, departureTime: string, arrivalTime: string, duration?: string): string => {
-  console.log('🕐 CALCULATING ARRIVAL DATETIME:');
+  console.log('🕐 CALCULATING ARRIVAL DATETIME (IST):');
   console.log('  departureDateTime:', departureDateTime);
   console.log('  departureTime:', departureTime);
   console.log('  arrivalTime:', arrivalTime);
@@ -44,30 +55,24 @@ const calculateArrivalDateTime = (departureDateTime: string, departureTime: stri
       throw new Error('Missing required parameters');
     }
 
-    // The arrivalTime from frontend is already calculated with the proper duration
-    // We just need to determine if it's on the same day or next day
-    const depDateTime = new Date(departureDateTime);
-    
-    // Parse departure time and arrival time
+    // Parse departure time
     const depTimeParts = departureTime.split(':');
-    const arrTimeParts = arrivalTime.split(':');
-    
     const depHours = parseInt(depTimeParts[0] || '0', 10);
     const depMinutes = parseInt(depTimeParts[1] || '0', 10);
-    const arrHours = parseInt(arrTimeParts[0] || '0', 10);
-    const arrMinutes = parseInt(arrTimeParts[1] || '0', 10);
     
     // Validate parsed values
-    if (isNaN(depHours) || isNaN(depMinutes) || isNaN(arrHours) || isNaN(arrMinutes)) {
-      throw new Error('Invalid time format');
+    if (isNaN(depHours) || isNaN(depMinutes)) {
+      throw new Error('Invalid departure time format');
     }
     
-    // Create departure datetime with correct date and time
-    const departureFullDateTime = new Date(depDateTime);
-    departureFullDateTime.setHours(depHours, depMinutes, 0, 0);
-    console.log('  departureFullDateTime:', departureFullDateTime.toISOString());
+    // Convert the stored UTC datetime back to IST for calculations
+    const departureDateUTC = new Date(departureDateTime);
+    const istOffsetMinutes = 5 * 60 + 30; // 330 minutes for IST (UTC+5:30)
+    const departureDateIST = new Date(departureDateUTC.getTime() + (istOffsetMinutes * 60 * 1000));
     
-    // If we have duration information, use it to calculate properly
+    console.log('  departureDateIST:', departureDateIST.toISOString());
+    
+    // If we have duration information, use it to calculate properly (PREFERRED METHOD)
     if (duration) {
       try {
         // Parse duration (format: "2h 30m" or "45m" or "38h 21m" or "43h")
@@ -79,9 +84,20 @@ const calculateArrivalDateTime = (departureDateTime: string, departureTime: stri
           
           // Only use duration-based calculation if duration is meaningful (> 0)
           if (totalMinutes > 0) {
-            // Add duration to departure datetime to get actual arrival datetime
-            const arrivalFullDateTime = new Date(departureFullDateTime.getTime() + totalMinutes * 60000);
-            return arrivalFullDateTime.toISOString();
+            // Add duration to departure datetime in IST to get actual arrival datetime
+            const arrivalDateIST = new Date(departureDateIST.getTime() + totalMinutes * 60000);
+            
+            // Convert back to UTC for storage
+            const arrivalDateUTC = new Date(arrivalDateIST.getTime() - (istOffsetMinutes * 60 * 1000));
+            
+            console.log('  Using duration-based calculation:', {
+              hours,
+              minutes,
+              totalMinutes,
+              arrivalDateIST: arrivalDateIST.toISOString(),
+              arrivalDateUTC: arrivalDateUTC.toISOString()
+            });
+            return arrivalDateUTC.toISOString();
           }
         }
       } catch (durationError) {
@@ -89,20 +105,39 @@ const calculateArrivalDateTime = (departureDateTime: string, departureTime: stri
       }
     }
     
-    // Fallback: Use intelligent date calculation based on arrival time
-    // If arrival time appears to be "earlier" than departure time, add days until it makes sense
-    const arrivalFullDateTime = new Date(depDateTime);
-    arrivalFullDateTime.setHours(arrHours, arrMinutes, 0, 0);
+    // Fallback: Use arrival time from frontend and determine the correct date
+    // Parse arrival time from frontend
+    const arrTimeParts = arrivalTime.split(':');
+    const arrHours = parseInt(arrTimeParts[0] || '0', 10);
+    const arrMinutes = parseInt(arrTimeParts[1] || '0', 10);
     
-    // If arrival time is earlier than departure time, it must be on a future day
-    // Keep adding days until arrival is after departure
-    while (arrivalFullDateTime.getTime() <= departureFullDateTime.getTime()) {
-      arrivalFullDateTime.setDate(arrivalFullDateTime.getDate() + 1);
+    if (isNaN(arrHours) || isNaN(arrMinutes)) {
+      throw new Error('Invalid arrival time format');
     }
     
-    return arrivalFullDateTime.toISOString();
+    // Create arrival datetime starting with the same date as departure in IST
+    const arrivalDateIST = new Date(departureDateIST);
+    arrivalDateIST.setHours(arrHours, arrMinutes, 0, 0);
     
-    return arrivalFullDateTime.toISOString();
+    // If arrival time is earlier than departure time, it must be on a future day
+    // Calculate how many days to add based on the time difference
+    if (arrivalDateIST.getTime() <= departureDateIST.getTime()) {
+      // Calculate the time difference in milliseconds
+      const timeDiff = departureDateIST.getTime() - arrivalDateIST.getTime();
+      // Calculate days to add (24 hours = 24 * 60 * 60 * 1000 milliseconds)
+      const daysToAdd = Math.ceil(timeDiff / (24 * 60 * 60 * 1000));
+      arrivalDateIST.setDate(arrivalDateIST.getDate() + daysToAdd);
+    }
+    
+    // Convert back to UTC for storage
+    const arrivalDateUTC = new Date(arrivalDateIST.getTime() - (istOffsetMinutes * 60 * 1000));
+    
+    console.log('  Using time-based calculation:', {
+      arrivalDateIST: arrivalDateIST.toISOString(),
+      arrivalDateUTC: arrivalDateUTC.toISOString()
+    });
+    
+    return arrivalDateUTC.toISOString();
   } catch (error) {
     console.error('Error calculating arrival datetime:', error);
     // If there's an error, return the departure time (this shouldn't happen in normal flow)

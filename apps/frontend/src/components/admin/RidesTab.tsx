@@ -4,6 +4,7 @@ import React from 'react';
 import { RideWithDriver } from '../../types/admin';
 import { DataTable } from './DataTable';
 import { StatusBadge } from './AdminComponents';
+import { formatDateTimeIST, formatDateIST, formatTimeIST } from '../../lib/timezone-utils';
 
 interface RidesTabProps {
   rides: RideWithDriver[];
@@ -66,11 +67,11 @@ export const RidesTab: React.FC<RidesTabProps> = ({ rides, onRefresh }) => {
       render: (_: any, row: RideWithDriver) => (
         <div className="space-y-1">
           <div className="text-sm">
-            <strong>Dep:</strong> {new Date(row.departure_time).toLocaleString()}
+            <strong>Dep:</strong> {formatDateIST(new Date(row.departure_time))} {formatTimeIST(new Date(row.departure_time))}
           </div>
           {row.arrival_time && (
             <div className="text-sm">
-              <strong>Arr:</strong> {new Date(row.arrival_time).toLocaleString()}
+              <strong>Arr:</strong> {formatDateIST(new Date(row.arrival_time))} {formatTimeIST(new Date(row.arrival_time))}
             </div>
           )}
         </div>
@@ -129,7 +130,7 @@ export const RidesTab: React.FC<RidesTabProps> = ({ rides, onRefresh }) => {
       label: 'Created',
       render: (value: string) => (
         <span className="text-sm text-gray-600">
-          {new Date(value).toLocaleDateString()}
+          {formatDateIST(new Date(value))}
         </span>
       )
     }
