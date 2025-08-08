@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 interface ConfirmDialogProps {
   isOpen: boolean;
@@ -9,9 +9,11 @@ interface ConfirmDialogProps {
   onConfirm: () => void;
   onCancel: () => void;
   type?: 'warning' | 'danger' | 'info';
+  requireTyping?: boolean;
+  typingText?: string;
 }
 
-export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
+function ConfirmDialog({
   isOpen,
   title,
   message,
@@ -19,9 +21,27 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   cancelText = 'Cancel',
   onConfirm,
   onCancel,
-  type = 'warning'
-}) => {
+  type = 'warning',
+  requireTyping = false,
+  typingText = 'DELETE'
+}: ConfirmDialogProps) {
+  const [inputValue, setInputValue] = useState('');
+
   if (!isOpen) return null;
+
+  const handleConfirm = () => {
+    if (requireTyping && inputValue !== typingText) {
+      return;
+    }
+    onConfirm();
+  };
+
+  const handleCancel = () => {
+    setInputValue('');
+    onCancel();
+  };
+
+  const isConfirmDisabled = requireTyping && inputValue !== typingText;
 
   const getTypeStyles = () => {
     switch (type) {
@@ -52,43 +72,61 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   const styles = getTypeStyles();
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
       <div 
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-        onClick={onCancel}
+        onClick={handleCancel}
       />
       
       {/* Dialog */}
-      <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
-        <div className="flex items-start space-x-4">
+      <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full mx-auto p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-start space-x-3 sm:space-x-4">
           {/* Icon */}
-          <div className={`flex-shrink-0 w-10 h-10 rounded-full ${styles.iconBg} flex items-center justify-center`}>
-            <span className="text-lg">{styles.icon}</span>
+          <div className={`flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 rounded-full ${styles.iconBg} flex items-center justify-center`}>
+            <span className="text-sm sm:text-lg">{styles.icon}</span>
           </div>
           
           {/* Content */}
-          <div className="flex-1">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+          <div className="flex-1 min-w-0">
+            <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">
               {title}
             </h3>
             <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-line">
               {message}
             </p>
+            
+            {/* Typing verification field */}
+            {requireTyping && (
+              <div className="mt-3 sm:mt-4">
+                <p className="text-xs sm:text-sm text-gray-700 mb-2">
+                  Type <span className="font-mono font-bold text-red-600">{typingText}</span> to confirm:
+                </p>
+                <input
+                  type="text"
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 font-mono text-sm sm:text-base"
+                  placeholder={typingText}
+                  autoFocus
+                />
+              </div>
+            )}
           </div>
         </div>
         
         {/* Actions */}
-        <div className="flex space-x-3 mt-6">
+        <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3 mt-4 sm:mt-6">
           <button
-            onClick={onCancel}
-            className="flex-1 bg-gray-200 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+            onClick={handleCancel}
+            className="w-full sm:flex-1 bg-gray-200 text-gray-800 px-4 py-2.5 sm:py-2 rounded-lg hover:bg-gray-300 transition-colors font-medium text-sm sm:text-base order-2 sm:order-1"
           >
             {cancelText}
           </button>
           <button
-            onClick={onConfirm}
-            className={`flex-1 ${styles.confirmBg} text-white px-4 py-2 rounded-lg transition-colors font-medium`}
+            onClick={handleConfirm}
+            disabled={isConfirmDisabled}
+            className={`w-full sm:flex-1 ${styles.confirmBg} text-white px-4 py-2.5 sm:py-2 rounded-lg transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base order-1 sm:order-2`}
           >
             {confirmText}
           </button>
@@ -96,4 +134,6 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       </div>
     </div>
   );
-};
+}
+
+export default ConfirmDialog;

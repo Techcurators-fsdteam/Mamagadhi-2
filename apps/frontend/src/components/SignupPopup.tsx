@@ -51,20 +51,80 @@ export default function SignupPopup({ isOpen, onClose, onSwitchToLogin }: Signup
 
   useEffect(() => {
     if (isOpen && !recaptchaVerifier && auth) {
-      const verifier = new RecaptchaVerifier(auth, 'signup-recaptcha-container', {
-        size: 'invisible',
-        callback: () => {
-          // reCAPTCHA solved
+      try {
+        // Clear any existing reCAPTCHA
+        const existingContainer = document.getElementById('signup-recaptcha-container');
+        if (existingContainer) {
+          existingContainer.innerHTML = '';
         }
-      });
-      setRecaptchaVerifier(verifier);
+
+        // Check if Firebase is properly configured
+        if (!auth.app.options.apiKey) {
+          setError('Firebase configuration error: API key missing');
+          return;
+        }
+
+        const verifier = new RecaptchaVerifier(auth, 'signup-recaptcha-container', {
+          size: 'invisible',
+          callback: () => {
+            console.log('reCAPTCHA solved successfully');
+          },
+          'expired-callback': () => {
+            console.log('reCAPTCHA expired');
+            setRecaptchaVerifier(null);
+            setError('Phone verification expired. Please try again.');
+          },
+          'error-callback': (error: any) => {
+            console.error('reCAPTCHA error:', error);
+            setRecaptchaVerifier(null);
+            setError('reCAPTCHA verification failed. This may indicate domain authorization issues in Firebase Console.');
+          }
+        });
+        
+        console.log('Initializing reCAPTCHA verifier...');
+        setRecaptchaVerifier(verifier);
+      } catch (error) {
+        console.error('Failed to initialize reCAPTCHA:', error);
+        setError(`Failed to initialize phone verification: ${error}. Please check Firebase configuration.`);
+      }
     }
+
+    // Cleanup on unmount or when closing
+    return () => {
+      if (!isOpen && recaptchaVerifier) {
+        try {
+          recaptchaVerifier.clear();
+        } catch (error) {
+          console.error('Error clearing reCAPTCHA:', error);
+        }
+        setRecaptchaVerifier(null);
+      }
+    };
   }, [isOpen, recaptchaVerifier]);
 
   if (!isOpen) return null;
 
   const isValidPhone = (phone: string) => {
     return /^\+91[6-9]\d{9}$/.test(phone);
+  };
+
+  const checkFirebaseConfig = () => {
+    if (!auth) {
+      return 'Firebase Auth not initialized';
+    }
+    
+    const config = auth.app.options;
+    const missing = [];
+    
+    if (!config.apiKey) missing.push('API Key');
+    if (!config.authDomain) missing.push('Auth Domain');
+    if (!config.projectId) missing.push('Project ID');
+    
+    if (missing.length > 0) {
+      return `Missing Firebase config: ${missing.join(', ')}`;
+    }
+    
+    return null;
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -105,24 +165,78 @@ export default function SignupPopup({ isOpen, onClose, onSwitchToLogin }: Signup
 
     setLoading(true);
 
-    try {
-      // First verify phone number with OTP
-      if (!recaptchaVerifier) {
-        throw new Error('reCAPTCHA not initialized');
-      }
+    // Check Firebase configuration first
+    const configError = checkFirebaseConfig();
+    if (configError) {
+      setError(`Configuration Error: ${configError}. Please check environment variables.`);
+      setLoading(false);
+      return;
+    }
 
+    try {
       if (!auth) {
         throw new Error('Firebase Auth not initialized');
       }
 
-      const confirmationResult = await signInWithPhoneNumber(auth, formData.phone, recaptchaVerifier);
-      setVerificationId(confirmationResult.verificationId);
-      setStep('phone-verification');
-      setResendCooldown(30);
+      // First verify phone number with OTP
+      if (!recaptchaVerifier) {
+        // Try to reinitialize reCAPTCHA if it's missing
+        try {
+          const existingContainer = document.getElementById('signup-recaptcha-container');
+          if (existingContainer) {
+            existingContainer.innerHTML = '';
+          }
+          const verifier = new RecaptchaVerifier(auth, 'signup-recaptcha-container', {
+            size: 'invisible',
+            callback: () => console.log('reCAPTCHA solved'),
+            'expired-callback': () => setRecaptchaVerifier(null),
+            'error-callback': (error: any) => {
+              console.error('reCAPTCHA error:', error);
+              setRecaptchaVerifier(null);
+            }
+          });
+          setRecaptchaVerifier(verifier);
+          
+          // Wait a moment for initialization
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          const confirmationResult = await signInWithPhoneNumber(auth, formData.phone, verifier);
+          setVerificationId(confirmationResult.verificationId);
+          setStep('phone-verification');
+          setResendCooldown(30);
+        } catch (initError) {
+          throw new Error('Failed to initialize phone verification. Please refresh the page and try again.');
+        }
+      } else {
+        const confirmationResult = await signInWithPhoneNumber(auth, formData.phone, recaptchaVerifier);
+        setVerificationId(confirmationResult.verificationId);
+        setStep('phone-verification');
+        setResendCooldown(30);
+      }
     } catch (error: unknown) {
       console.error('Phone verification error:', error);
       const authError = error as AuthError;
-      setError(authError.message || 'Failed to send OTP');
+      console.error('Phone verification error details:', {
+        code: authError.code,
+        message: authError.message,
+        name: authError.name
+      });
+      
+      if (authError.code === 'auth/invalid-app-credential') {
+        setError('Phone verification failed. Possible causes:\n• Domain not authorized in Firebase Console\n• reCAPTCHA configuration issues\n• Phone authentication not enabled\n\nCheck Firebase Console settings and try refreshing.');
+      } else if (authError.code === 'auth/quota-exceeded') {
+        setError('SMS quota exceeded. Please try again later or contact support.');
+      } else if (authError.code === 'auth/invalid-phone-number') {
+        setError('Invalid phone number format. Please check and try again.');
+      } else if (authError.code === 'auth/missing-app-credential') {
+        setError('App verification failed. This indicates Firebase configuration issues.');
+      } else if (authError.message?.includes('app credential')) {
+        setError('Authentication service temporarily unavailable. Please refresh the page and try again.');
+      } else if (authError.message?.includes('reCAPTCHA')) {
+        setError('reCAPTCHA verification failed. Please refresh the page and ensure your domain is authorized in Firebase Console.');
+      } else {
+        setError(`Phone verification failed: ${authError.message}. Please try again or contact support.`);
+      }
     } finally {
       setLoading(false);
     }
@@ -265,11 +379,13 @@ export default function SignupPopup({ isOpen, onClose, onSwitchToLogin }: Signup
       const authError = error as AuthError;
       
       if (authError.code === 'auth/email-already-in-use') {
-        setError('An account with this email already exists');
+        setError('An account with this email already exists. Please try logging in instead, or contact support if you believe your profile was deleted.');
       } else if (authError.code === 'auth/weak-password') {
         setError('Password is too weak');
       } else if (authError.code === 'auth/invalid-email') {
         setError('Invalid email address');
+      } else if (authError.code === 'auth/invalid-app-credential') {
+        setError('Authentication service error. This may occur if your account exists but profile was deleted. Please try logging in first or contact support.');
       } else if (authError.message?.includes('Failed to create user profile')) {
         setError('Failed to create user profile in database. Please try again.');
       } else {
@@ -319,6 +435,22 @@ export default function SignupPopup({ isOpen, onClose, onSwitchToLogin }: Signup
     setError('');
     setVerificationId('');
     setSelectedRole('passenger');
+    
+    // Clear reCAPTCHA
+    if (recaptchaVerifier) {
+      try {
+        recaptchaVerifier.clear();
+      } catch (error) {
+        console.error('Error clearing reCAPTCHA during reset:', error);
+      }
+      setRecaptchaVerifier(null);
+    }
+    
+    // Clear reCAPTCHA container
+    const container = document.getElementById('signup-recaptcha-container');
+    if (container) {
+      container.innerHTML = '';
+    }
   };
 
   return (
@@ -509,7 +641,15 @@ export default function SignupPopup({ isOpen, onClose, onSwitchToLogin }: Signup
 
             {error && (
               <div className="text-red-200 text-sm bg-red-500/20 rounded-lg p-3">
-                {error}
+                <div className="mb-2">{error}</div>
+                {error.includes('Firebase configuration') || error.includes('app credential') || error.includes('refresh the page') ? (
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="mt-2 px-3 py-1 bg-white/20 text-white text-xs rounded hover:bg-white/30 transition-colors"
+                  >
+                    Refresh Page
+                  </button>
+                ) : null}
               </div>
             )}
 
@@ -520,6 +660,32 @@ export default function SignupPopup({ isOpen, onClose, onSwitchToLogin }: Signup
             >
               {loading ? 'Creating Account...' : 'Create Account'}
             </button>
+
+            {error && error.includes('app credential') && (
+              <div className="text-center mt-4">
+                <p className="text-xs text-black/60 mb-2">
+                  Having trouble with phone verification?
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    resetForm();
+                    setError('');
+                  }}
+                  className="text-xs text-blue-600 hover:underline"
+                >
+                  Reset and try again
+                </button>
+                <span className="text-xs text-black/60 mx-2">|</span>
+                <button
+                  type="button"
+                  onClick={() => window.location.reload()}
+                  className="text-xs text-blue-600 hover:underline"
+                >
+                  Refresh page
+                </button>
+              </div>
+            )}
           </form>
         )}
 
@@ -549,7 +715,15 @@ export default function SignupPopup({ isOpen, onClose, onSwitchToLogin }: Signup
 
             {error && (
               <div className="text-red-200 text-sm bg-red-500/20 rounded-lg p-3">
-                {error}
+                <div className="mb-2">{error}</div>
+                {error.includes('Firebase configuration') || error.includes('app credential') || error.includes('refresh the page') ? (
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="mt-2 px-3 py-1 bg-white/20 text-white text-xs rounded hover:bg-white/30 transition-colors"
+                  >
+                    Refresh Page
+                  </button>
+                ) : null}
               </div>
             )}
 

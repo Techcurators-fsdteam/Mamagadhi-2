@@ -118,8 +118,8 @@ const MyRidesPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [deleteDialog, setDeleteDialog] = useState<{
     isOpen: boolean;
-    item: Ride | RideBooking | null;
-    type: 'ride' | 'booking';
+    item: Ride | null;
+    type: 'ride';
     isLoading: boolean;
   }>({
     isOpen: false,
@@ -489,13 +489,37 @@ const MyRidesPage: React.FC = () => {
   };
 
   // Handle delete/cancel actions
-  const handleDeleteItem = (item: Ride | RideBooking, type: 'ride' | 'booking') => {
+  const handleDeleteRide = (ride: Ride) => {
     setDeleteDialog({
       isOpen: true,
-      item: item,
-      type: type,
+      item: ride,
+      type: 'ride',
       isLoading: false
     });
+  };
+
+  const handleCancelBookingRequest = async (booking: RideBooking) => {
+    if (!user?.uid || !supabase) return;
+
+    try {
+      setProcessingRequest(booking.booking_id);
+
+      const { error } = await supabase
+        .from('ride_bookings')
+        .delete()
+        .eq('booking_id', booking.booking_id)
+        .eq('passenger_id', user.uid);
+
+      if (error) throw error;
+
+      setBookings(prevBookings => prevBookings.filter(b => b.booking_id !== booking.booking_id));
+      toast.success('Booking request cancelled successfully');
+    } catch (err) {
+      console.error('Error cancelling booking request:', err);
+      toast.error(err instanceof Error ? err.message : 'Failed to cancel request');
+    } finally {
+      setProcessingRequest(null);
+    }
   };
 
   const confirmDeleteItem = async () => {
@@ -517,25 +541,13 @@ const MyRidesPage: React.FC = () => {
 
         setRides(prevRides => prevRides.filter(r => r.ride_id !== ride.ride_id));
         toast.success('Ride deleted successfully');
-      } else {
-        const booking = item as RideBooking;
-        const { error } = await supabase
-          .from('ride_bookings')
-          .delete()
-          .eq('booking_id', booking.booking_id)
-          .eq('passenger_id', user.uid);
-
-        if (error) throw error;
-
-        setBookings(prevBookings => prevBookings.filter(b => b.booking_id !== booking.booking_id));
-        toast.success('Booking request cancelled successfully');
       }
 
       setDeleteDialog({ isOpen: false, item: null, type: 'ride', isLoading: false });
 
     } catch (err) {
-      console.error('Error deleting item:', err);
-      toast.error(err instanceof Error ? err.message : 'Failed to delete item');
+      console.error('Error deleting ride:', err);
+      toast.error(err instanceof Error ? err.message : 'Failed to delete ride');
     } finally {
       setDeleteDialog(prev => ({ ...prev, isLoading: false }));
     }
@@ -789,7 +801,23 @@ const MyRidesPage: React.FC = () => {
                                   <Clock className="w-4 h-4 text-gray-400" />
                                   <div>
                                     <div className="text-sm text-gray-500">Estimated Arrival</div>
-                                    <div className="font-medium">{formatTime(ride.arrival_time)}</div>
+                                    <div className="font-medium">
+                                      {(() => {
+                                        const depDate = new Date(ride.departure_time);
+                                        const arrDate = new Date(ride.arrival_time);
+                                        const isSameDay = depDate.toDateString() === arrDate.toDateString();
+                                        
+                                        if (isSameDay) {
+                                          return formatTime(ride.arrival_time);
+                                        } else {
+                                          return `${formatTime(ride.arrival_time)} (${arrDate.toLocaleDateString('en-IN', { 
+                                            weekday: 'short', 
+                                            day: 'numeric', 
+                                            month: 'short' 
+                                          })})`;
+                                        }
+                                      })()}
+                                    </div>
                                   </div>
                                 </div>
                               )}
@@ -813,36 +841,19 @@ const MyRidesPage: React.FC = () => {
                         {/* Actions */}
                         <div className="flex items-center gap-2 ml-4">
                           <button
-                            onClick={() => {
-                              // Additional check to prevent booking own rides from dashboard
-                              if (user?.uid === ride.driver_id) {
-                                toast.error('This is your own ride. Use the actions below to manage it.');
-                                return;
-                              }
-                              router.push(`/book/${ride.ride_id}`);
-                            }}
-                            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition"
-                            title="View Details"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          <button
-                            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition"
-                            title="Edit Ride"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteItem(ride, 'ride')}
-                            className={`p-2 rounded-lg transition ${
+                            onClick={() => handleDeleteRide(ride)}
+                            className={`px-3 py-2 rounded-lg transition font-medium text-sm ${
                               ride.status === 'open' 
-                                ? 'text-gray-400 hover:text-red-600 hover:bg-red-50' 
-                                : 'text-gray-300 cursor-not-allowed'
+                                ? 'text-red-600 bg-red-50 hover:bg-red-100 border border-red-200' 
+                                : 'text-gray-300 bg-gray-50 cursor-not-allowed border border-gray-200'
                             }`}
                             title={ride.status === 'open' ? 'Delete Ride' : 'Cannot delete - ride is not open'}
                             disabled={ride.status !== 'open'}
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <div className="flex items-center gap-2">
+                              <Trash2 className="w-4 h-4" />
+                              <span>Delete</span>
+                            </div>
                           </button>
                         </div>
                       </div>
@@ -1072,27 +1083,21 @@ const MyRidesPage: React.FC = () => {
 
                         {/* Actions */}
                         <div className="flex items-center gap-2 ml-4">
-                          <button
-                            onClick={() => {
-                              // Prevent viewing own rides as bookable rides
-                              if (user?.uid === booking.ride.driver_id) {
-                                toast.error('This is your own ride. Check your Published Rides tab to manage it.');
-                                return;
-                              }
-                              router.push(`/book/${booking.ride_id}`);
-                            }}
-                            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition"
-                            title="View Ride Details"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
                           {booking.booking_status === 'pending' && (
                             <button
-                              onClick={() => handleDeleteItem(booking, 'booking')}
-                              className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+                              onClick={() => handleCancelBookingRequest(booking)}
+                              disabled={processingRequest === booking.booking_id}
+                              className="px-3 py-2 text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                               title="Cancel Request"
                             >
-                              <X className="w-4 h-4" />
+                              <div className="flex items-center gap-2">
+                                {processingRequest === booking.booking_id ? (
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-600"></div>
+                                ) : (
+                                  <X className="w-4 h-4" />
+                                )}
+                                <span>{processingRequest === booking.booking_id ? 'Cancelling...' : 'Cancel Request'}</span>
+                              </div>
                             </button>
                           )}
                         </div>
@@ -1329,15 +1334,9 @@ const MyRidesPage: React.FC = () => {
           onClose={cancelDeleteItem}
           onConfirm={confirmDeleteItem}
           rideDetails={{
-            origin: deleteDialog.type === 'ride' 
-              ? (deleteDialog.item as Ride).origin 
-              : (deleteDialog.item as RideBooking).ride.origin,
-            destination: deleteDialog.type === 'ride' 
-              ? (deleteDialog.item as Ride).destination 
-              : (deleteDialog.item as RideBooking).ride.destination,
-            departure_time: deleteDialog.type === 'ride' 
-              ? (deleteDialog.item as Ride).departure_time 
-              : (deleteDialog.item as RideBooking).ride.departure_time
+            origin: deleteDialog.item.origin,
+            destination: deleteDialog.item.destination,
+            departure_time: deleteDialog.item.departure_time
           }}
           isLoading={deleteDialog.isLoading}
         />

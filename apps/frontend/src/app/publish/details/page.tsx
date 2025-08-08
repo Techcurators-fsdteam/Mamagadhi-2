@@ -319,7 +319,7 @@ const PublishDetailsPage: React.FC = () => {
     if (!departureTime || !duration) return '';
     
     try {
-      // Parse duration (format: "2h 30m" or "45m")
+      // Parse duration (format: "2h 30m" or "45m" or "38h 21m")
       const durationMatch = duration.match(/(?:(\d+)h\s*)?(?:(\d+)m)?/);
       if (!durationMatch) return '';
       
@@ -329,13 +329,15 @@ const PublishDetailsPage: React.FC = () => {
       
       // Parse departure time (format: "HH:MM")
       const [depHours, depMinutes] = departureTime.split(':').map(Number);
+      
+      // Create a date object for today with the departure time
       const departureDate = new Date();
       departureDate.setHours(depHours, depMinutes, 0, 0);
       
-      // Add duration
+      // Add the total duration in minutes to get the actual arrival datetime
       const arrivalDate = new Date(departureDate.getTime() + totalMinutes * 60000);
       
-      // Format arrival time
+      // Format arrival time in 24-hour format
       const arrivalHours = arrivalDate.getHours().toString().padStart(2, '0');
       const arrivalMins = arrivalDate.getMinutes().toString().padStart(2, '0');
       
@@ -367,6 +369,7 @@ const PublishDetailsPage: React.FC = () => {
         originState,
         destinationState,
         vehicleType: vehicleTypeParam,
+        duration: routeDetails?.duration, // Add duration for proper backend calculation
         driverId: user.uid // Use actual user ID from Firebase auth
       };
 

@@ -71,11 +71,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             } catch {} // error unused
           }
         } catch (error) {
-          if (error && typeof error === 'object' && 'code' in error) {
-            if ((error as { code: string }).code === 'PGRST116') {
-              setUserProfile(null);
-            }
-          }
+          console.log('Profile fetch error for existing Firebase user:', error);
+          // If profile doesn't exist but Firebase user does, set profile to null
+          // This handles the case where user deleted their profile but auth account exists
+          setUserProfile(null);
         }
       } else {
         setUserProfile(null);

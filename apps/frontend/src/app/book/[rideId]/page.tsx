@@ -287,6 +287,32 @@ const RideSummary: React.FC = () => {
     });
   };
 
+  const formatDateShort = (timeString: string) => {
+    return new Date(timeString).toLocaleDateString('en-IN', {
+      day: 'numeric',
+      month: 'short'
+    });
+  };
+
+  const formatDateTime = (timeString: string) => {
+    const date = new Date(timeString);
+    const time = date.toLocaleTimeString('en-IN', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    const dateShort = date.toLocaleDateString('en-IN', {
+      day: 'numeric',
+      month: 'short'
+    });
+    return { time, date: dateShort };
+  };
+
+  const isDifferentDay = (departure: string, arrival: string) => {
+    const departureDate = new Date(departure);
+    const arrivalDate = new Date(arrival);
+    return departureDate.toDateString() !== arrivalDate.toDateString();
+  };
+
   if (loading) {
     return (
       <>
@@ -327,24 +353,24 @@ const RideSummary: React.FC = () => {
       <Navbar />
       
       {/* Back Navigation */}
-      <div className="mx-auto w-full max-w-6xl px-4 py-4">
+      <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
         <button
           onClick={handleBackNavigation}
-          className="inline-flex items-center gap-2 text-[#4AAAFF] hover:text-[#3d9ae8] font-medium text-sm transition-colors"
+          className="inline-flex items-center gap-2 text-[#4AAAFF] hover:text-[#3d9ae8] font-medium text-sm sm:text-base transition-colors"
         >
-          <ArrowLeftIcon className="h-4 w-4" />
+          <ArrowLeftIcon className="h-4 w-4 sm:h-5 sm:w-5" />
           Back to Search Results
         </button>
       </div>
 
-      <div className="mx-auto w-full max-w-6xl space-y-6 px-4 py-4 md:flex md:space-y-0 md:space-x-8">
+      <div className="mx-auto w-full max-w-7xl space-y-6 px-4 sm:px-6 lg:px-8 py-6 lg:flex lg:space-y-0 lg:space-x-8">
         {/* ──────────────────────  LEFT  ────────────────────── */}
         <section className="flex-1 space-y-6">
           {/* Driver card */}
-          <div className="relative rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="relative rounded-2xl border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
             {/* Header row */}
-            <div className="flex items-start gap-4">
-              <div className="relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border-2 border-blue-400">
+            <div className="flex items-start gap-3 sm:gap-4">
+              <div className="relative flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center overflow-hidden rounded-full border-2 border-blue-400 flex-shrink-0">
                 {rideData.driver.profile_url ? (
                   <img 
                     src={rideData.driver.profile_url} 
@@ -356,16 +382,17 @@ const RideSummary: React.FC = () => {
                     {rideData.driver.display_name.charAt(0).toUpperCase()}
                   </span>
                 )}
-                <CheckBadgeIcon className="absolute -bottom-1 -right-1 h-5 w-5 text-blue-500 drop-shadow" />
+                <CheckBadgeIcon className="absolute -bottom-1 -right-1 h-4 w-4 sm:h-5 sm:w-5 text-blue-500 drop-shadow" />
               </div>
 
-              <div className="flex flex-col">
-                <h2 className="font-semibold">{rideData.driver.display_name}</h2>
+              <div className="flex flex-col min-w-0 flex-1">
+                <h2 className="font-semibold text-base sm:text-lg">{rideData.driver.display_name}</h2>
+                <p className="text-sm text-gray-500 mt-1">Driver</p>
               </div>
             </div>
 
             {/* Body rows */}
-            <div className="mt-6 flex flex-col space-y-4 text-sm text-gray-600">
+            <div className="mt-4 sm:mt-6 flex flex-col space-y-3 sm:space-y-4 text-sm text-gray-600">
               <InfoRow
                 icon={<ShieldCheckIcon className="h-5 w-5 text-blue-500" />}
                 label="Verified Driver"
@@ -460,41 +487,41 @@ const RideSummary: React.FC = () => {
             ) : !showBookingForm && !bookingSuccess ? (
               <button 
                 onClick={() => setShowBookingForm(true)}
-                className="mt-6 inline-flex items-center gap-2 rounded-full bg-blue-500 px-6 py-2 text-sm font-medium text-white hover:bg-blue-600"
+                className="mt-4 sm:mt-6 inline-flex items-center justify-center gap-2 rounded-full bg-blue-500 px-4 sm:px-6 py-2 sm:py-3 text-sm font-medium text-white hover:bg-blue-600 transition-colors w-full sm:w-auto"
               >
-                <ChatBubbleLeftEllipsisIcon className="h-5 w-5" />
+                <ChatBubbleLeftEllipsisIcon className="h-4 w-4 sm:h-5 sm:w-5" />
                 Connect&nbsp;with&nbsp;{rideData.driver.display_name.toLowerCase()}
               </button>
             ) : bookingSuccess ? (
-              <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+              <div className="mt-4 sm:mt-6 p-3 sm:p-4 bg-green-50 border border-green-200 rounded-lg">
                 <div className="flex items-center gap-2 text-green-800">
-                  <CheckBadgeIcon className="h-5 w-5" />
-                  <span className="font-medium">Booking request sent!</span>
+                  <CheckBadgeIcon className="h-4 w-4 sm:h-5 sm:w-5" />
+                  <span className="font-medium text-sm sm:text-base">Booking request sent!</span>
                 </div>
-                <p className="text-sm text-green-700 mt-1">
+                <p className="text-xs sm:text-sm text-green-700 mt-1">
                   The driver will review your request and respond soon.
                 </p>
               </div>
             ) : (
-              <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <h4 className="font-medium text-blue-900 mb-3">Request this ride</h4>
+              <div className="mt-4 sm:mt-6 bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4">
+                <h4 className="font-medium text-blue-900 mb-3 text-sm sm:text-base">Request this ride</h4>
                 
                 {/* Additional check before showing form */}
                 {isOwnRide ? (
                   <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-                    <p className="text-sm text-red-700">You cannot book your own ride.</p>
+                    <p className="text-xs sm:text-sm text-red-700">You cannot book your own ride.</p>
                   </div>
                 ) : (
                   <>
                     {/* Seats Selection */}
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <div className="mb-3 sm:mb-4">
+                      <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
                         Number of seats needed
                       </label>
                       <select
                         value={seatsRequested}
                         onChange={(e) => setSeatsRequested(parseInt(e.target.value))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                       >
                         {Array.from({ length: Math.min(rideData.seats_available, 4) }, (_, i) => i + 1).map(num => (
                           <option key={num} value={num}>
@@ -505,15 +532,15 @@ const RideSummary: React.FC = () => {
                     </div>
 
                     {/* Message Input */}
-                    <div className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <div className="mb-3 sm:mb-4">
+                      <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
                         Message to driver (optional)
                       </label>
                       <textarea
                         value={bookingMessage}
                         onChange={(e) => setBookingMessage(e.target.value)}
                         placeholder="Hi! I'd like to book this ride. I'll be ready at the pickup time."
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-sm"
                         rows={3}
                         maxLength={500}
                       />
@@ -530,11 +557,11 @@ const RideSummary: React.FC = () => {
                     )}
 
                     {/* Action Buttons */}
-                    <div className="flex gap-3">
+                    <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
                       <button
                         onClick={handleBookingSubmit}
                         disabled={submittingBooking || isOwnRide}
-                        className="flex-1 bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm"
+                        className="w-full sm:flex-1 bg-blue-500 text-white px-4 py-2.5 sm:py-2 rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm order-1"
                       >
                         {submittingBooking ? 'Submitting...' : `Request ${seatsRequested} seat${seatsRequested > 1 ? 's' : ''}`}
                       </button>
@@ -546,7 +573,7 @@ const RideSummary: React.FC = () => {
                           setSeatsRequested(1);
                         }}
                         disabled={submittingBooking}
-                        className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 text-sm"
+                        className="w-full sm:w-auto px-4 py-2.5 sm:py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 text-sm order-2"
                       >
                         Cancel
                       </button>
@@ -567,26 +594,29 @@ const RideSummary: React.FC = () => {
           {/* Ride support chip */}
           <button 
             onClick={() => router.push('/info/contact-us')}
-            className="inline-flex items-center gap-2 rounded-2xl border border-gray-200 bg-white px-6 py-3 text-sm font-medium shadow-sm hover:bg-gray-50"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 sm:px-6 py-3 text-sm font-medium shadow-sm hover:bg-gray-50 transition-colors"
           >
-            <PhoneIcon className="h-5 w-5 text-gray-600" />
+            <PhoneIcon className="h-4 w-4 sm:h-5 sm:w-5 text-gray-600" />
             Ride&nbsp;Support
           </button>
         </section>
 
         {/* ──────────────────────  RIGHT  ────────────────────── */}
-        <aside className="w-full max-w-xs space-y-4">
+        <aside className="w-full lg:max-w-sm xl:max-w-md space-y-4 lg:space-y-6">
           {/* Ride details card */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-            <h3 className="text-lg font-semibold">{formatDate(rideData.departure_time)}</h3>
+          <div className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
+            <h3 className="text-lg sm:text-xl font-semibold mb-4 sm:mb-6">{formatDate(rideData.departure_time)}</h3>
 
             {/* Timeline */}
-            <div className="mt-6 grid grid-cols-[auto_min-content_1fr] gap-x-3 text-sm">
+            <div className="grid grid-cols-[auto_min-content_1fr] gap-x-3 text-sm">
               {/* Origin */}
-              <span className="font-semibold">{formatTime(rideData.departure_time)}</span>
+              <div className="flex flex-col items-center">
+                <span className="font-semibold text-sm sm:text-base">{formatDateTime(rideData.departure_time).time}</span>
+                <span className="text-xs text-gray-500 mt-1">{formatDateTime(rideData.departure_time).date}</span>
+              </div>
               <TimelineNode first />
               <Location
-                city={rideData.origin_state}
+                city={rideData.origin}
                 address={rideData.origin_state ? `${rideData.origin}, ${rideData.origin_state}` : rideData.origin}
               />
 
@@ -625,10 +655,21 @@ const RideSummary: React.FC = () => {
               )}
 
               {/* Destination */}
-              <span className="font-semibold">{formatTime(rideData.arrival_time)}</span>
+              <div className="flex flex-col items-center">
+                <span className="font-semibold text-sm sm:text-base">{formatDateTime(rideData.arrival_time).time}</span>
+                <span className="text-xs text-gray-500 mt-1">
+                  {isDifferentDay(rideData.departure_time, rideData.arrival_time) 
+                    ? formatDateTime(rideData.arrival_time).date 
+                    : formatDateTime(rideData.arrival_time).date
+                  }
+                </span>
+                {isDifferentDay(rideData.departure_time, rideData.arrival_time) && (
+                  <span className="text-xs text-orange-600 font-medium mt-1">Next day</span>
+                )}
+              </div>
               <TimelineNode last />
               <Location
-                city={rideData.destination_state}
+                city={rideData.destination}
                 address={rideData.destination_state ? `${rideData.destination}, ${rideData.destination_state}` : rideData.destination}
               />
             </div>
@@ -645,11 +686,11 @@ const RideSummary: React.FC = () => {
               </div>
             )}
 
-            <Separator extra="my-6" />
+            <Separator extra="my-4 sm:my-6" />
 
             {/* Driver mini */}
-            <div className="flex items-center gap-3">
-              <TruckIcon className="h-6 w-6 text-gray-600" />
+            <div className="flex items-center gap-2 sm:gap-3">
+              <TruckIcon className="h-5 w-5 sm:h-6 sm:w-6 text-gray-600" />
               <div className="flex items-center gap-1 text-sm">
                 <span className="font-medium">{rideData.driver.display_name}</span>
               </div>
@@ -657,9 +698,9 @@ const RideSummary: React.FC = () => {
           </div>
 
           {/* Fare / passenger chip */}
-          <div className="flex items-center justify-between rounded-2xl border border-gray-200 bg-white px-6 py-3 text-sm font-medium shadow-sm">
-            <span>{rideData.seats_available}&nbsp;seats available</span>
-            <span className="text-lg font-semibold">
+          <div className="flex items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 sm:px-6 py-3 text-sm font-medium shadow-sm">
+            <span className="text-xs sm:text-sm">{rideData.seats_available}&nbsp;seats available</span>
+            <span className="text-lg sm:text-xl font-semibold">
               ₹{rideData.price_per_seat}
             </span>
           </div>
@@ -719,9 +760,9 @@ const Location = ({
   city: string;
   address: string;
 }) => (
-  <div className="space-y-0.5">
-    <p className="font-medium">{city}</p>
-    <p className="text-xs text-gray-500">{address}</p>
+  <div className="space-y-0.5 min-w-0">
+    <p className="font-medium text-sm sm:text-base truncate">{city}</p>
+    <p className="text-xs text-gray-500 truncate">{address}</p>
   </div>
 );
 

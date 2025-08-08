@@ -52,9 +52,9 @@ const ProfilePhotoSection: React.FC<ProfilePhotoSectionProps> = ({
   };
 
   return (
-    <div className="lg:col-span-1 bg-white p-6 lg:p-8 flex flex-col items-center justify-center min-h-[400px]">
+    <div className="lg:col-span-1 bg-white p-4 sm:p-6 lg:p-8 flex flex-col items-center justify-center min-h-[300px] sm:min-h-[350px] lg:min-h-[400px] border-b lg:border-b-0 lg:border-r border-gray-200">
       <div
-        className="relative group cursor-pointer mb-6"
+        className="relative group cursor-pointer mb-4 sm:mb-6"
         onClick={() => !isProfileImageLocked && photoInputRef.current?.click()}
         title={isProfileImageLocked ? "Profile photo already uploaded" : "Click to upload profile photo (PNG or JPG only)"}
         style={{ pointerEvents: isProfileImageLocked ? 'none' : 'auto' }}
@@ -65,7 +65,7 @@ const ProfilePhotoSection: React.FC<ProfilePhotoSectionProps> = ({
             alt="Profile"
             width={180}
             height={180}
-            className="w-36 h-36 lg:w-44 lg:h-44 rounded-full object-cover object-center border-4 border-[#4AAAFF] transition-transform group-hover:scale-105"
+            className="w-28 h-28 sm:w-36 sm:h-36 lg:w-44 lg:h-44 rounded-full object-cover object-center border-4 border-[#4AAAFF] transition-transform group-hover:scale-105"
           />
         ) : photoPreview ? (
           <Image
@@ -73,10 +73,10 @@ const ProfilePhotoSection: React.FC<ProfilePhotoSectionProps> = ({
             alt="Profile Preview"
             width={180}
             height={180}
-            className="w-36 h-36 lg:w-44 lg:h-44 rounded-full object-cover object-center border-4 border-[#4AAAFF] transition-transform group-hover:scale-105"
+            className="w-28 h-28 sm:w-36 sm:h-36 lg:w-44 lg:h-44 rounded-full object-cover object-center border-4 border-[#4AAAFF] transition-transform group-hover:scale-105"
           />
         ) : (
-          <div className="w-36 h-36 lg:w-44 lg:h-44 rounded-full bg-gradient-to-br from-blue-100 to-[#4AAAFF] flex items-center justify-center text-4xl lg:text-5xl font-bold text-white border-4 border-[#4AAAFF] transition-transform group-hover:scale-105">
+          <div className="w-28 h-28 sm:w-36 sm:h-36 lg:w-44 lg:h-44 rounded-full bg-gradient-to-br from-blue-100 to-[#4AAAFF] flex items-center justify-center text-2xl sm:text-4xl lg:text-5xl font-bold text-white border-4 border-[#4AAAFF] transition-transform group-hover:scale-105">
             {getInitials()}
           </div>
         )}
@@ -105,17 +105,17 @@ const ProfilePhotoSection: React.FC<ProfilePhotoSectionProps> = ({
       </div>
       
       {/* Profile Photo Status */}
-      <div className="text-center max-w-xs">
+      <div className="text-center w-full max-w-sm px-2">
         {isProfileImageLocked ? (
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-            <div className="text-lg text-green-700 font-medium mb-2">Profile Complete</div>
-            <div className="text-sm text-green-600">Your profile photo has been uploaded successfully</div>
+          <div className="bg-green-50 border border-green-200 rounded-lg p-3 sm:p-4">
+            <div className="text-base sm:text-lg text-green-700 font-medium mb-1 sm:mb-2">Profile Complete</div>
+            <div className="text-xs sm:text-sm text-green-600">Your profile photo has been uploaded successfully</div>
           </div>
         ) : (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <div className="text-lg text-[#4AAAFF] font-medium mb-2">Upload Photo</div>
-            <div className="text-sm text-gray-600 mb-3">Click your avatar to upload a profile photo</div>
-            <div className="text-xs text-gray-500 bg-white rounded-lg px-3 py-2">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4">
+            <div className="text-base sm:text-lg text-[#4AAAFF] font-medium mb-1 sm:mb-2">Upload Photo</div>
+            <div className="text-xs sm:text-sm text-gray-600 mb-2 sm:mb-3">Click your avatar to upload a profile photo</div>
+            <div className="text-xs text-gray-500 bg-white rounded-lg px-2 sm:px-3 py-1.5 sm:py-2">
               Supported: PNG, JPG formats only
             </div>
           </div>
@@ -125,7 +125,7 @@ const ProfilePhotoSection: React.FC<ProfilePhotoSectionProps> = ({
           <button
             type="button"
             onClick={onPhotoUpload}
-            className="mt-4 w-full bg-[#4AAAFF] text-white px-4 py-2 rounded-lg hover:bg-blue-600 text-sm font-medium disabled:opacity-50 transition-all duration-300"
+            className="mt-3 sm:mt-4 w-full bg-[#4AAAFF] text-white px-4 py-2 rounded-lg hover:bg-blue-600 text-sm font-medium disabled:opacity-50 transition-all duration-300"
             disabled={photoUploadStatus === 'uploading'}
           >
             {photoUploadStatus === 'uploading' ? (

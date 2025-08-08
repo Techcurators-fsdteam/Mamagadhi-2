@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Image from 'next/image';
 import { useSupabaseAuth } from '../../lib/supabase-auth';
 
 interface SupabaseAdminLoginProps {
@@ -33,19 +34,20 @@ export const SupabaseAdminLogin: React.FC<SupabaseAdminLoginProps> = ({ onLoginS
   };
 
   return (
-    <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8">
+    <div className="max-w-xl w-full p-12">
       <div className="text-center mb-6">
-        <div className="text-blue-600 mb-4">
-          <svg className="w-16 h-16 mx-auto" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a5 5 0 00-4.546 2.916A5.986 5.986 0 0010 16a5.986 5.986 0 004.546-2.084A5 5 0 0010 11z" clipRule="evenodd" />
-          </svg>
-        </div>
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">
-          Admin Login
+      <div className="inline-flex items-center justify-center p-2">
+              <Image
+                src="/logo.png"
+                alt="Mamagadhi Logo"
+                width={180}
+                height={60}
+                className="object-contain"
+              />
+            </div>
+        <h1 className="text-lg md:mt-4 mt-4font-bold text-gray-900 mb-2">
+          Admin Portal
         </h1>
-        <p className="text-gray-600">
-          Sign in with your Supabase admin credentials
-        </p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -59,7 +61,7 @@ export const SupabaseAdminLogin: React.FC<SupabaseAdminLoginProps> = ({ onLoginS
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            placeholder="admin@example.com"
+            placeholder="Enter your email"
             required
             disabled={loading}
           />
@@ -90,7 +92,7 @@ export const SupabaseAdminLogin: React.FC<SupabaseAdminLoginProps> = ({ onLoginS
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+          className="w-full bg-[#4aaaff] text-white py-3 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
         >
           {loading ? (
             <div className="flex items-center justify-center">
@@ -98,18 +100,12 @@ export const SupabaseAdminLogin: React.FC<SupabaseAdminLoginProps> = ({ onLoginS
               Signing In...
             </div>
           ) : (
-            'Sign In to Admin Panel'
+            'Sign In'
           )}
         </button>
       </form>
 
-      <div className="mt-6 pt-6 border-t border-gray-200">
-        <div className="text-sm text-gray-600">
-          <p className="mb-2"><strong>Note:</strong> This uses Supabase authentication.</p>
-          <p className="mb-2">• Only users with admin role can access the admin panel</p>
-          <p>• Contact your system administrator for admin credentials</p>
-        </div>
-      </div>
+      
     </div>
   );
 };

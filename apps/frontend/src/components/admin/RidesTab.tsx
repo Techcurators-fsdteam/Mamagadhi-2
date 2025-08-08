@@ -22,6 +22,7 @@ export const RidesTab: React.FC<RidesTabProps> = ({ rides, onRefresh }) => {
     {
       key: 'route',
       label: 'Route',
+      filterable: true,
       render: (_: any, row: RideWithDriver) => (
         <div className="space-y-1">
           <div className="font-medium text-sm">
@@ -34,8 +35,9 @@ export const RidesTab: React.FC<RidesTabProps> = ({ rides, onRefresh }) => {
       )
     },
     {
-      key: 'driver',
+      key: 'driver_name',
       label: 'Driver',
+      filterable: true,
       render: (_: any, row: RideWithDriver) => (
         <div>
           {row.driver ? (
@@ -52,6 +54,8 @@ export const RidesTab: React.FC<RidesTabProps> = ({ rides, onRefresh }) => {
     {
       key: 'vehicle_type',
       label: 'Vehicle',
+      filterable: true,
+      filterOptions: ['sedan', 'suv', 'hatchback', 'bus', 'tempo traveller'],
       render: (value: string) => (
         <span className="px-2 py-1 bg-gray-100 text-gray-800 text-xs rounded">{value}</span>
       )
@@ -92,6 +96,8 @@ export const RidesTab: React.FC<RidesTabProps> = ({ rides, onRefresh }) => {
     {
       key: 'status',
       label: 'Status',
+      filterable: true,
+      filterOptions: ['active', 'cancelled', 'completed', 'pending'],
       render: (value: string) => <StatusBadge status={value} type="ride" />
     },
     {
@@ -138,7 +144,7 @@ export const RidesTab: React.FC<RidesTabProps> = ({ rides, onRefresh }) => {
         </div>
         <button
           onClick={onRefresh}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="px-4 py-2 bg-[#4AAAFF] text-white rounded-lg hover:bg-[#3A9AEF] focus:outline-none focus:ring-2 focus:ring-[#4AAAFF] transition-colors"
         >
           Refresh
         </button>

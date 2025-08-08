@@ -137,29 +137,6 @@ export default function ContactUsPage() {
           </div>
 
           {/* Direct-contact section unchanged */}
-          <section className="mt-8 pt-4 border-t border-[#e6f0fa]">
-            <h2 className="text-base font-bold text-[#4AAAFF] mb-2 tracking-wide">
-              Or contact us directly
-            </h2>
-            <div className="mb-1.5 text-base">
-              <span className="font-semibold">Phone:</span>{" "}
-              <a
-                href="tel:+919963477751"
-                className="text-[#4AAAFF] underline font-semibold tracking-wide"
-              >
-                +91 99634 77751
-              </a>
-            </div>
-            <div className="text-base">
-              <span className="font-semibold">Email:</span>{" "}
-              <a
-                href="mailto:venuch@mamaghadi.com"
-                className="text-[#4AAAFF] underline font-semibold tracking-wide"
-              >
-                venuch@mamaghadi.com
-              </a>
-            </div>
-          </section>
         </main>
       </div>
 

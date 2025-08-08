@@ -159,20 +159,82 @@ const BookingDetailsForm: React.FC<BookingDetailsFormProps> = ({
             {/* Arrival Time (Auto-calculated) */}
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700">
-                Est. Arrival Time
+                Est. Arrival
               </label>
-              <div className="relative">
-                <Clock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <Input
-                  type="time"
-                  value={bookingDetails.arrivalTime}
-                  readOnly
-                  className="pl-10 h-12 rounded-lg border border-gray-200 bg-gray-50 text-gray-600 cursor-not-allowed"
-                  placeholder="Auto-calculated"
-                />
-              </div>
-              <div className="text-xs text-gray-500 text-center">
-                Based on route duration
+              <div className="space-y-2">
+                {/* Arrival Time */}
+                <div className="relative">
+                  <Clock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <Input
+                    type="time"
+                    value={bookingDetails.arrivalTime}
+                    readOnly
+                    className="pl-10 h-12 rounded-lg border border-gray-200 bg-gray-50 text-gray-600 cursor-not-allowed"
+                    placeholder="Auto-calculated"
+                  />
+                </div>
+                
+                {/* Arrival Date Info */}
+                {(() => {
+                  if (bookingDetails.departureTime && bookingDetails.arrivalTime && bookingDetails.date && routeDetails?.duration) {
+                    try {
+                      // Parse the duration to calculate the actual arrival date
+                      const durationMatch = routeDetails.duration.match(/(?:(\d+)h\s*)?(?:(\d+)m)?/);
+                      if (durationMatch) {
+                        const hours = parseInt(durationMatch[1] || '0');
+                        const minutes = parseInt(durationMatch[2] || '0');
+                        const totalMinutes = hours * 60 + minutes;
+                        
+                        // Parse departure time
+                        const [depHours, depMinutes] = bookingDetails.departureTime.split(':').map(Number);
+                        
+                        // Create departure datetime
+                        const departureDate = new Date(bookingDetails.date);
+                        departureDate.setHours(depHours, depMinutes, 0, 0);
+                        
+                        // Calculate actual arrival datetime by adding duration
+                        const arrivalDate = new Date(departureDate.getTime() + totalMinutes * 60000);
+                        
+                        const isSameDay = departureDate.toDateString() === arrivalDate.toDateString();
+                        
+                        return (
+                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                            <div className="text-sm text-blue-800">
+                              <div className="font-medium">Arrival Details:</div>
+                              <div className="mt-1">
+                                <span className="font-semibold">{bookingDetails.arrivalTime}</span>
+                                {!isSameDay && (
+                                  <span className="ml-2 text-amber-600 font-medium">
+                                    on {arrivalDate.toLocaleDateString('en-IN', { 
+                                      weekday: 'short', 
+                                      day: 'numeric', 
+                                      month: 'short' 
+                                    })}
+                                  </span>
+                                )}
+                                {isSameDay && (
+                                  <span className="ml-2 text-green-600 font-medium">
+                                    (same day)
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-xs text-blue-600 mt-1">
+                                Journey Duration: {routeDetails.duration}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      }
+                    } catch (error) {
+                      // Ignore parsing errors
+                    }
+                  }
+                  return (
+                    <div className="text-xs text-gray-500 text-center">
+                      Based on route duration
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </div>

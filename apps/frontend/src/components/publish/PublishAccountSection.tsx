@@ -4,19 +4,23 @@ import React from 'react';
 
 const PublishAccountSection: React.FC = () => {
   return (
-    <section className="py-20 bg-white">
+    <section className="py-12 sm:py-16 lg:py-20 bg-white">
       <div className="container mx-auto px-4 lg:px-8 max-w-7xl">
-        <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-          {/* Left: Image placeholder */}
-          <div className="flex justify-center lg:justify-start">
-            <div className="bg-gray-200 rounded-xl w-full max-w-md aspect-[4/3] flex items-center justify-center">
-              <span className="text-gray-400 text-sm">Image placeholder</span>
+        <div className="grid lg:grid-cols-2 gap-8 sm:gap-12 lg:gap-16 items-center">
+          {/* Left: Image - Hidden on mobile, visible on lg+ */}
+          <div className="hidden lg:flex justify-center lg:justify-start">
+            <div className="w-full max-w-md">
+              <img 
+                src="/publish2.svg" 
+                alt="Create account illustration" 
+                className="w-full h-full rounded-xl"
+              />
             </div>
           </div>
           
           {/* Right: Steps */}
-          <div className="space-y-8">
-            <h2 className="text-3xl lg:text-4xl font-bold text-gray-900">
+          <div className="space-y-6 sm:space-y-8">
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 text-center lg:text-left">
               Create Your Account On <span className="text-[#4AAAFF]">Mamaghadi</span>
             </h2>
             

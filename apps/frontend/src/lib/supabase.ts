@@ -70,6 +70,10 @@ export const getUserProfile = async (userId: string): Promise<UserProfile | null
     .single();
 
   if (error) {
+    // If the profile doesn't exist (user deleted their account), return null instead of throwing
+    if ((error as any)?.code === 'PGRST116' || (error as any)?.message?.includes('No rows found')) {
+      return null;
+    }
     console.error('Error fetching user profile:', error);
     throw error;
   }

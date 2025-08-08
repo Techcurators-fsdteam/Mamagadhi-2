@@ -67,7 +67,9 @@ export const ProfileProvider = ({ children, user }: { children: ReactNode; user:
         const profile = await getUserProfile(user.uid);
         setUserProfile(profile);
       } catch (error) {
+        // Handle the case where profile is deleted or doesn't exist
         console.error('Error refreshing profile:', error);
+        setUserProfile(null);
       }
     }
   };

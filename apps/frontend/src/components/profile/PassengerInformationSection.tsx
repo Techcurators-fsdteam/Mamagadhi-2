@@ -34,17 +34,17 @@ const PassengerInformationSection: React.FC<PassengerInformationSectionProps> = 
   onEmailVerification
 }) => {
   return (
-    <div className="lg:col-span-2 p-6 lg:p-8">
-      <div className="bg-white rounded-lg p-6 h-full">
-        <div className="flex items-center mb-6">
+    <div className="lg:col-span-2 p-4 sm:p-6 lg:p-8 border-b lg:border-b-0 border-gray-200">
+      <div className="bg-white rounded-lg p-4 sm:p-6 h-full">
+        <div className="flex items-center mb-4 sm:mb-6">
           <div>
-            <h3 className="text-2xl font-bold text-gray-900 mb-1">Passenger Information</h3>
-            <p className="text-gray-600">Your personal details and preferences</p>
+            <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-1">Passenger Information</h3>
+            <p className="text-sm sm:text-base text-gray-600">Your personal details and preferences</p>
           </div>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+          <div className="space-y-4 sm:space-y-5">
             <div className="group">
               <label className="block text-sm font-medium text-gray-700 mb-2">First Name</label>
               <input
@@ -53,7 +53,7 @@ const PassengerInformationSection: React.FC<PassengerInformationSectionProps> = 
                 value={formData.first_name}
                 onChange={onInputChange}
                 disabled={!isEditing}
-                className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#4AAAFF] focus:border-[#4AAAFF] outline-none disabled:bg-gray-50 disabled:text-gray-500 transition-all duration-300 font-medium group-hover:border-gray-300"
+                className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#4AAAFF] focus:border-[#4AAAFF] outline-none disabled:bg-gray-50 disabled:text-gray-500 transition-all duration-300 font-medium group-hover:border-gray-300 text-sm sm:text-base"
                 placeholder="Enter your first name"
               />
             </div>
@@ -66,7 +66,7 @@ const PassengerInformationSection: React.FC<PassengerInformationSectionProps> = 
                 value={formData.last_name}
                 onChange={onInputChange}
                 disabled={!isEditing}
-                className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#4AAAFF] focus:border-[#4AAAFF] outline-none disabled:bg-gray-50 disabled:text-gray-500 transition-all duration-300 font-medium group-hover:border-gray-300"
+                className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#4AAAFF] focus:border-[#4AAAFF] outline-none disabled:bg-gray-50 disabled:text-gray-500 transition-all duration-300 font-medium group-hover:border-gray-300 text-sm sm:text-base"
                 placeholder="Enter your last name"
               />
             </div>
@@ -79,13 +79,13 @@ const PassengerInformationSection: React.FC<PassengerInformationSectionProps> = 
                 value={formData.display_name}
                 onChange={onInputChange}
                 disabled={!isEditing}
-                className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#4AAAFF] focus:border-[#4AAAFF] outline-none disabled:bg-gray-50 disabled:text-gray-500 transition-all duration-300 font-medium group-hover:border-gray-300"
+                className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#4AAAFF] focus:border-[#4AAAFF] outline-none disabled:bg-gray-50 disabled:text-gray-500 transition-all duration-300 font-medium group-hover:border-gray-300 text-sm sm:text-base"
                 placeholder="How you want to be displayed"
               />
             </div>
           </div>
           
-          <div className="space-y-5">
+          <div className="space-y-4 sm:space-y-5">
             <div className="group">
               <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
               <input
@@ -93,7 +93,7 @@ const PassengerInformationSection: React.FC<PassengerInformationSectionProps> = 
                 name="phone"
                 value={formData.phone}
                 disabled
-                className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#4AAAFF] focus:border-[#4AAAFF] outline-none disabled:bg-gray-50 disabled:text-gray-500 transition-all duration-300 font-medium group-hover:border-gray-300"
+                className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#4AAAFF] focus:border-[#4AAAFF] outline-none disabled:bg-gray-50 disabled:text-gray-500 transition-all duration-300 font-medium group-hover:border-gray-300 text-sm sm:text-base"
                 placeholder="Enter your phone number"
               />
               <div className="flex items-center mt-2">
@@ -121,23 +121,23 @@ const PassengerInformationSection: React.FC<PassengerInformationSectionProps> = 
                 type="email"
                 value={user?.email || ''}
                 disabled
-                className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-500 font-medium"
+                className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-500 font-medium text-sm sm:text-base"
               />
               <div className="flex items-center justify-between mt-2">
                 <div className="flex items-center">
                   {user?.emailVerified ? (
                     <div className="flex items-center bg-green-100 px-2 py-1 rounded-lg">
-                      <svg className="w-4 h-4 mr-1 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                      <svg className="w-3 h-3 sm:w-4 sm:h-4 mr-1 text-green-600" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                       </svg>
-                      <span className="text-green-700 font-medium text-sm">Verified</span>
+                      <span className="text-green-700 font-medium text-xs sm:text-sm">Verified</span>
                     </div>
                   ) : (
                     <div className="flex items-center bg-amber-100 px-2 py-1 rounded-lg">
-                      <svg className="w-4 h-4 mr-1 text-amber-600" fill="currentColor" viewBox="0 0 20 20">
+                      <svg className="w-3 h-3 sm:w-4 sm:h-4 mr-1 text-amber-600" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                       </svg>
-                      <span className="text-amber-700 font-medium text-sm">Not verified</span>
+                      <span className="text-amber-700 font-medium text-xs sm:text-sm">Not verified</span>
                     </div>
                   )}
                 </div>

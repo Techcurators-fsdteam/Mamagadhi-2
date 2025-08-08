@@ -34,18 +34,17 @@ const DriverInformationSection: React.FC<DriverInformationSectionProps> = ({
   const router = useRouter();
 
   return (
-    <div className="bg-white p-6 lg:p-8">
-      <div className="flex items-center justify-between mb-8">
+    <div className="bg-white p-4 sm:p-6 lg:p-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 sm:mb-8 gap-4">
         <div className="flex items-center">
-          
           <div>
-            <h3 className="text-2xl font-bold text-gray-900 mb-1">Driver Information</h3>
-            <p className="text-gray-600">Upload your documents to become a verified driver</p>
+            <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-1">Driver Information</h3>
+            <p className="text-sm sm:text-base text-gray-600">Upload your documents to become a verified driver</p>
           </div>
         </div>
         
         {/* Driver Verification Status and Publish Button */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 sm:gap-4">
           {(isIdVerified && isDlVerified) ? (
             <>
               <div className="flex items-center bg-green-100 px-4 py-2 rounded-lg">

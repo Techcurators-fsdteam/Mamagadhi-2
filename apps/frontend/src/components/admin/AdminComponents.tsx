@@ -59,7 +59,7 @@ export const DocumentLink: React.FC<DocumentLinkProps> = ({ url, label }) => {
       href={url}
       target="_blank"
       rel="noopener noreferrer"
-      className="inline-flex items-center px-3 py-1 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+      className="inline-flex items-center px-3 py-1 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#4AAAFF] transition-colors"
     >
       📄 {label}
     </a>
@@ -113,7 +113,7 @@ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({ size = 'md' }) =
 
   return (
     <div className="flex justify-center items-center">
-      <div className={`animate-spin rounded-full border-b-2 border-blue-600 ${sizeClasses[size]}`}></div>
+      <div className={`animate-spin rounded-full border-b-2 border-[#4AAAFF] ${sizeClasses[size]}`}></div>
     </div>
   );
 };

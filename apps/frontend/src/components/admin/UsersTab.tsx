@@ -41,11 +41,20 @@ export const UsersTab: React.FC<UsersTabProps> = ({ users, onRefresh }) => {
         <span className="font-mono text-xs text-gray-600">{value.slice(0, 8)}...</span>
       )
     },
-    { key: 'email', label: 'Email' },
-    { key: 'phone', label: 'Phone' },
+    { 
+      key: 'email', 
+      label: 'Email',
+      filterable: true
+    },
+    { 
+      key: 'phone', 
+      label: 'Phone',
+      filterable: true
+    },
     {
-      key: 'name',
+      key: 'display_name',
       label: 'Name',
+      filterable: true,
       render: (_: any, row: UserWithDriverProfile) => (
         <div>
           <div className="font-medium">{row.display_name}</div>
@@ -56,23 +65,9 @@ export const UsersTab: React.FC<UsersTabProps> = ({ users, onRefresh }) => {
     {
       key: 'role',
       label: 'Role',
+      filterable: true,
+      filterOptions: ['passenger', 'driver'],
       render: (value: string) => <StatusBadge status={value || 'passenger'} />
-    },
-    {
-      key: 'verifications',
-      label: 'Verifications',
-      render: (_: any, row: UserWithDriverProfile) => (
-        <div className="space-y-1">
-          <div className="flex items-center space-x-2">
-            <span className="text-xs">Email:</span>
-            <StatusBadge status={row.is_email_verified ? 'verified' : 'unverified'} />
-          </div>
-          <div className="flex items-center space-x-2">
-            <span className="text-xs">Phone:</span>
-            <StatusBadge status={row.is_phone_verified ? 'verified' : 'unverified'} />
-          </div>
-        </div>
-      )
     },
     {
       key: 'driver_documents',
@@ -129,7 +124,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({ users, onRefresh }) => {
         </div>
         <button
           onClick={onRefresh}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="px-4 py-2 bg-[#4AAAFF] text-white rounded-lg hover:bg-[#3A9AEF] focus:outline-none focus:ring-2 focus:ring-[#4AAAFF] transition-colors"
         >
           Refresh
         </button>

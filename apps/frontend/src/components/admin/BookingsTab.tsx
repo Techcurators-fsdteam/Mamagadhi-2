@@ -1,10 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import { BookingWithDetails } from '../../types/admin';
 import { DataTable } from './DataTable';
 import { StatusBadge } from './AdminComponents';
-import { updateBookingStatus } from '../../lib/admin-api';
 
 interface BookingsTabProps {
   bookings: BookingWithDetails[];
@@ -12,21 +11,6 @@ interface BookingsTabProps {
 }
 
 export const BookingsTab: React.FC<BookingsTabProps> = ({ bookings, onRefresh }) => {
-  const [loadingBookings, setLoadingBookings] = useState<Record<string, boolean>>({});
-
-  const handleStatusUpdate = async (bookingId: string, newStatus: string) => {
-    setLoadingBookings(prev => ({ ...prev, [bookingId]: true }));
-    
-    try {
-      await updateBookingStatus(bookingId, newStatus);
-      onRefresh(); // Refresh data to show updated status
-    } catch (error) {
-      console.error('Error updating booking status:', error);
-      alert('Failed to update booking status');
-    } finally {
-      setLoadingBookings(prev => ({ ...prev, [bookingId]: false }));
-    }
-  };
 
   const columns = [
     {
@@ -39,6 +23,7 @@ export const BookingsTab: React.FC<BookingsTabProps> = ({ bookings, onRefresh })
     {
       key: 'ride_info',
       label: 'Ride Info',
+      filterable: true,
       render: (_: any, row: BookingWithDetails) => (
         <div className="space-y-1">
           {row.ride ? (
@@ -59,6 +44,7 @@ export const BookingsTab: React.FC<BookingsTabProps> = ({ bookings, onRefresh })
     {
       key: 'passenger',
       label: 'Passenger',
+      filterable: true,
       render: (_: any, row: BookingWithDetails) => (
         <div>
           {row.passenger ? (
@@ -82,6 +68,8 @@ export const BookingsTab: React.FC<BookingsTabProps> = ({ bookings, onRefresh })
     {
       key: 'booking_status',
       label: 'Status',
+      filterable: true,
+      filterOptions: ['pending', 'confirmed', 'cancelled', 'completed'],
       render: (value: string) => <StatusBadge status={value} type="booking" />
     },
     {
@@ -110,35 +98,6 @@ export const BookingsTab: React.FC<BookingsTabProps> = ({ bookings, onRefresh })
           )}
         </div>
       )
-    },
-    {
-      key: 'actions',
-      label: 'Actions',
-      render: (_: any, row: BookingWithDetails) => (
-        <div className="flex space-x-1">
-          <button
-            onClick={() => handleStatusUpdate(row.booking_id, 'confirmed')}
-            disabled={loadingBookings[row.booking_id] || row.booking_status === 'confirmed'}
-            className="px-2 py-1 text-xs font-medium text-white bg-green-600 rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Confirm
-          </button>
-          <button
-            onClick={() => handleStatusUpdate(row.booking_id, 'cancelled')}
-            disabled={loadingBookings[row.booking_id] || row.booking_status === 'cancelled'}
-            className="px-2 py-1 text-xs font-medium text-white bg-red-600 rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={() => handleStatusUpdate(row.booking_id, 'completed')}
-            disabled={loadingBookings[row.booking_id] || row.booking_status === 'completed'}
-            className="px-2 py-1 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Complete
-          </button>
-        </div>
-      )
     }
   ];
 
@@ -151,7 +110,7 @@ export const BookingsTab: React.FC<BookingsTabProps> = ({ bookings, onRefresh })
         </div>
         <button
           onClick={onRefresh}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="px-4 py-2 bg-[#4AAAFF] text-white rounded-lg hover:bg-[#3A9AEF] focus:outline-none focus:ring-2 focus:ring-[#4AAAFF] transition-colors"
         >
           Refresh
         </button>

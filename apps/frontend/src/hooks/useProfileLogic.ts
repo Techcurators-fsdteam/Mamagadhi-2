@@ -56,6 +56,9 @@ export const useProfileLogic = () => {
     message: string;
     onConfirm: () => void;
     type?: 'warning' | 'danger' | 'info';
+    requireTyping?: boolean;
+    typingText?: string;
+    confirmText?: string;
   } | null>(null);
 
   // Verification status from admin
@@ -361,6 +364,111 @@ export const useProfileLogic = () => {
     }
   };
 
+  const handleDeleteProfile = () => {
+    setConfirmDialogData({
+      title: 'Delete Profile',
+      message: 'Are you absolutely sure you want to delete your profile? This action cannot be undone and will permanently delete:\n\n• Your profile and personal information\n• All your published rides\n• All your ride bookings\n• All your data from the system\n\nThis action is irreversible.',
+      type: 'danger',
+      onConfirm: async () => {
+        try {
+          setShowConfirmDialog(false);
+          setConfirmDialogData(null);
+          
+          // Show second confirmation with typing verification
+          setConfirmDialogData({
+            title: 'Final Confirmation - Type DELETE',
+            message: 'This is your final warning. Once you proceed, your account and all associated data will be permanently deleted.\n\nType "DELETE" below to confirm this irreversible action.',
+            type: 'danger',
+            requireTyping: true,
+            typingText: 'DELETE',
+            confirmText: 'Delete Forever',
+            onConfirm: async () => {
+              await performDeleteProfile();
+            }
+          });
+          setShowConfirmDialog(true);
+        } catch (error) {
+          toast.error('Error preparing deletion. Please try again.');
+        }
+      }
+    });
+    setShowConfirmDialog(true);
+  };
+
+  const performDeleteProfile = async () => {
+    if (!user || !supabase) return;
+    
+    try {
+      toast.loading('Deleting your profile and all associated data...', { id: 'delete-profile' });
+      
+      // 1. First get all ride IDs for this user to delete stops
+      const { data: userRides } = await supabase
+        .from('rides')
+        .select('ride_id')
+        .eq('driver_id', user.uid);
+      
+      // 2. Delete all ride stops for user's rides
+      if (userRides && userRides.length > 0) {
+        const rideIds = userRides.map(ride => ride.ride_id);
+        const { error: stopsError } = await supabase
+          .from('ride_stops')
+          .delete()
+          .in('ride_id', rideIds);
+        
+        if (stopsError) console.warn('Error deleting ride stops:', stopsError);
+      }
+      
+      // 3. Delete all rides published by the user
+      const { error: ridesError } = await supabase
+        .from('rides')
+        .delete()
+        .eq('driver_id', user.uid);
+      
+      if (ridesError) throw ridesError;
+      
+      // 4. Delete all ride bookings by the user
+      const { error: bookingsError } = await supabase
+        .from('ride_bookings')
+        .delete()
+        .eq('passenger_id', user.uid);
+      
+      if (bookingsError) throw bookingsError;
+      
+      // 5. Delete driver profile if exists
+      const { error: driverProfileError } = await supabase
+        .from('driver_profiles')
+        .delete()
+        .eq('user_profile_id', user.uid);
+      
+      if (driverProfileError && driverProfileError.code !== 'PGRST116') { // PGRST116 is "not found" error
+        throw driverProfileError;
+      }
+      
+      // 6. Delete user profile
+      const { error: userProfileError } = await supabase
+        .from('user_profiles')
+        .delete()
+        .eq('id', user.uid);
+      
+      if (userProfileError) throw userProfileError;
+      
+      // 7. Delete Firebase Auth user
+      await user.delete();
+      
+      toast.success('Profile deleted successfully. You will be redirected to the home page.', { id: 'delete-profile' });
+      
+      // Redirect to home page
+      router.push('/');
+      
+    } catch (error: any) {
+      console.error('Error deleting profile:', error);
+      toast.error('Failed to delete profile completely. Please contact support.', { id: 'delete-profile' });
+    } finally {
+      setShowConfirmDialog(false);
+      setConfirmDialogData(null);
+    }
+  };
+
   const handleSave = async () => {
     if (!user || !userProfile) return;
     setIsSaving(true);
@@ -480,6 +588,7 @@ export const useProfileLogic = () => {
     handleSave,
     handleEmailVerification,
     handleCancel,
+    handleDeleteProfile,
     setIsEditing,
     setError,
     setMessage,
