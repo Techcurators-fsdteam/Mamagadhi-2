@@ -34,7 +34,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <title>Mamagadhi - Ride Sharing Platform</title>
+        <title>Mamaghadi - Ride Sharing Platform</title>
         <meta name="description" content="Community-driven ride sharing platform" />
       </head>
       <body className={inter.className}>
